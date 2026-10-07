@@ -118,13 +118,35 @@ state = read_settrade()
 cfg = load_config(st.secrets)
 
 # -----------------------------
-# Diagnostic panel
+# Existing trading terminal
 # -----------------------------
-with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not state.get("connected", False)):
+html_path = Path(__file__).with_name("index.html")
+html = html_path.read_text(encoding="utf-8")
+
+state_json = json.dumps(
+    state,
+    ensure_ascii=False,
+    separators=(",", ":"),
+)
+
+html = html.replace(
+    "</head>",
+    f"<script>window.__TFEX_STATE__ = {state_json};</script></head>",
+    1,
+)
+
+# components.html is retained because it executes the existing terminal's
+# JavaScript. st.html/st.iframe do not provide an equivalent local HTML
+# execution path for this app.
+components.html(html, height=2400, scrolling=False)
+
+# -----------------------------
+# Temporary Settrade diagnostic (bottom)
+# -----------------------------
+with st.expander("🔧 Settrade diagnostic (ชั่วคราว)", expanded=False):
     configured = bool(state.get("configured"))
     connected = bool(state.get("connected"))
     sdk_ok = bool(state.get("sdk"))
-    account_ok = bool(state.get("account_info")) or connected
 
     st.markdown(
         f"""
@@ -165,11 +187,8 @@ with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not sta
     if sdk_meta:
         st.caption(f"SDK package: {sdk_meta.get('package', '—')} | version: {sdk_meta.get('version', '—')} | import: {sdk_meta.get('import', '—')}")
 
-    # Cloud-side network diagnostic. This is the same version endpoint that
-    # settrade-v2 checks during Investor initialization, but without secrets.
     st.divider()
     st.subheader("🌐 Settrade network diagnostic")
-
     probe = probe_settrade_network()
 
     p1, p2, p3 = st.columns(3)
@@ -246,26 +265,3 @@ with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not sta
         st.cache_data.clear()
         st.rerun()
 
-
-# -----------------------------
-# Existing trading terminal
-# -----------------------------
-html_path = Path(__file__).with_name("index.html")
-html = html_path.read_text(encoding="utf-8")
-
-state_json = json.dumps(
-    state,
-    ensure_ascii=False,
-    separators=(",", ":"),
-)
-
-html = html.replace(
-    "</head>",
-    f"<script>window.__TFEX_STATE__ = {state_json};</script></head>",
-    1,
-)
-
-# components.html is retained because it executes the existing terminal's
-# JavaScript. st.html/st.iframe do not provide an equivalent local HTML
-# execution path for this app.
-components.html(html, height=2400, scrolling=False)
