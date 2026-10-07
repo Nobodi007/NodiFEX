@@ -1,24 +1,20 @@
-# TFEX Terminal V4 — Live Analytics Shell
+# TFEX Terminal V4
 
-Streamlit shell for a TFEX trading journal. Demo trading records and fake performance numbers are intentionally removed.
-
-## Included
-- Dashboard / Orders / Positions / Journal / Analytics navigation
-- Live-account shell; read-only until TFEX API is connected
-- Deep Analytics structure: Day / Week / Month / Year / All time
-- Win rate by period, time of day, asset, side, and day of week
-- Holding-time analytics: average, median, shortest, longest, intraday/overnight
-- P/L, Profit Factor, Expectancy, Average R, Max Drawdown placeholders
-- Risk/Reward analytics placeholders
-- Monthly trading calendar modeled after the requested mobile layout
-- Empty Trade Log table ready for real TFEX execution data
-- Filters for asset, side, result, setup/note search
+Streamlit wrapper for the TFEX Terminal live-account shell.
 
 ## Run
+
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Important
-This version does NOT connect to TFEX and does NOT submit orders. It is a UI/data-contract shell waiting for real TFEX API authentication and read-only account/execution sync.
+## Streamlit Cloud
+
+Set the main file to `app.py`.
+
+The app is currently a live-account shell with demo trading data removed. TFEX credentials should be stored in Streamlit Secrets when API integration is added; never commit real secrets to GitHub.
+
+## Layout fix
+
+The embedded terminal is configured to use the available Streamlit width without a nested vertical scrollbar. The page is responsive for desktop and smaller screens.
