@@ -49,19 +49,36 @@ def probe_settrade_network():
             f"_x{platform.architecture()[0].replace('bit', '')}/{sdk_version}"
         )
 
-        response = requests.get(
-            url,
-            headers={
-                "User-Agent": ua,
-                "Content-Type": "application/json",
-            },
-            timeout=20,
+        def do_probe(user_agent):
+            response = requests.get(
+                url,
+                headers={
+                    "User-Agent": user_agent,
+                    "Content-Type": "application/json",
+                },
+                timeout=20,
+            )
+            return {
+                "status": response.status_code,
+                "reason": response.reason,
+                "body": response.text[:1500],
+            }
+
+        sdk_probe = do_probe(ua)
+
+        # A second request with a normal browser UA tells us whether the 403
+        # is tied to the SDK User-Agent or to the Cloud egress/network itself.
+        browser_ua = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/131.0.0.0 Safari/537.36"
         )
+        browser_probe = do_probe(browser_ua)
 
         return {
-            "ok": response.ok,
-            "status": response.status_code,
-            "reason": response.reason,
+            "ok": sdk_probe["status"] < 400,
+            "status": sdk_probe["status"],
+            "reason": sdk_probe["reason"],
             "url": url,
             "python": platform.python_version(),
             "platform": platform.platform(),
@@ -69,7 +86,10 @@ def probe_settrade_network():
             "architecture": platform.architecture()[0],
             "sdk_version": sdk_version,
             "user_agent": ua,
-            "body": response.text[:1500],
+            "body": sdk_probe["body"],
+            "browser_status": browser_probe["status"],
+            "browser_reason": browser_probe["reason"],
+            "browser_body": browser_probe["body"],
             "error": None,
         }
     except Exception as exc:
@@ -161,19 +181,30 @@ with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not sta
     with p3:
         st.metric("Python", probe.get("python") or "—")
 
-    if probe.get("ok"):
-        st.success("Cloud runtime can reach the Settrade Sandbox version endpoint (HTTP 200).")
-    elif probe.get("status") == 403:
-        st.error(
-            "Cloud runtime reaches Settrade, but Settrade/CDN returns HTTP 403 "
-            "for the SDK version endpoint. This is not a missing-secret error."
+    if probe.get("status") == 200 and probe.get("browser_status") == 200:
+        st.success("Both SDK-style and browser-style requests reach Settrade (HTTP 200).")
+    elif probe.get("status") != 200 and probe.get("browser_status") == 200:
+        st.warning(
+            "IMPORTANT: browser-style request gets HTTP 200, but the SDK-style "
+            f"User-Agent gets HTTP {probe.get('status')}. The 403 may be User-Agent/WAF "
+            "specific rather than an IP block."
         )
         st.info(
-            "Local testing can still work while Streamlit Community Cloud fails because "
-            "the app runs from Streamlit's cloud network. If this stays 403, the likely "
-            "fix is network/IP allowlisting or moving the Settrade connector to a backend "
-            "with an accepted/stable egress IP—not changing the App ID/secret."
+            "If this result appears, we can work around it in the SDK request headers "
+            "without moving the whole app to another server."
         )
+    elif probe.get("status") == 403:
+        st.error(
+            "Both the Streamlit Cloud runtime and the SDK-style request are being "
+            "rejected by Settrade/CDN. This is not a missing-secret error."
+        )
+        if probe.get("browser_status") == 403:
+            st.info(
+                "The browser-style request is also HTTP 403, so changing the SDK "
+                "User-Agent will not solve it. The remaining fix is Settrade-side "
+                "allowlisting/network access or moving the connector to a backend "
+                "with an accepted/stable egress IP."
+            )
     elif probe.get("status") is not None:
         st.warning(
             f"Cloud runtime reached the endpoint but received HTTP {probe.get('status')} "
@@ -187,9 +218,15 @@ with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not sta
         st.write("Machine:", probe.get("machine") or "—")
         st.write("Architecture:", probe.get("architecture") or "—")
         st.write("Endpoint:", probe.get("url") or "—")
-        st.write("User-Agent:", probe.get("user_agent") or "—")
+        st.write("SDK User-Agent:", probe.get("user_agent") or "—")
+        st.write("SDK-style HTTP:", probe.get("status") or "—")
+        st.write("Browser-style HTTP:", probe.get("browser_status") or "—")
         if probe.get("body"):
+            st.markdown("**SDK-style response**")
             st.code(probe["body"], language="json")
+        if probe.get("browser_body"):
+            st.markdown("**Browser-style response**")
+            st.code(probe["browser_body"], language="json")
         if probe.get("error"):
             st.code(probe["error"], language=None)
 
