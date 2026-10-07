@@ -1,295 +1,295 @@
-import json
-from pathlib import Path
+from __future__ import annotations
 
-import streamlit as st
-import streamlit.components.v1 as components
-
-from services.settrade_client import connect_read_only, load_config
+from typing import Any, Dict
 
 
-st.set_page_config(
-    page_title="TFEX Terminal",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+def load_config(secrets) -> Dict[str, str]:
+    """
+    Read Settrade configuration safely from Streamlit Secrets.
 
+    Expected:
 
-st.markdown("""
-<style>
-.stMainBlockContainer { max-width:none!important; width:100%!important; padding:0!important; }
-section.main > div.block-container { max-width:none!important; width:100%!important; padding:0!important; }
-[data-testid="stIFrame"] { width:100%!important; }
-[data-testid="stIFrame"] iframe { width:100%!important; display:block!important; border:0!important; }
+    [settrade]
+    app_id = "..."
+    app_secret = "..."
+    broker_id = "SANDBOX"
+    app_code = "SANDBOX"
+    derivatives_account = "Nobody-D"
+    """
 
-.tfex-diag {
-    padding:12px 16px;
-    border:1px solid rgba(128,128,128,.25);
-    border-radius:10px;
-    margin:8px 0 14px;
-}
+    empty = {
+        "app_id": "",
+        "app_secret": "",
+        "broker_id": "SANDBOX",
+        "app_code": "SANDBOX",
+        "derivatives_account": "Nobody-D",
+    }
 
-.tfex-ok {
-    color:#20c997;
-    font-weight:700;
-}
-
-.tfex-bad {
-    color:#ff6b6b;
-    font-weight:700;
-}
-
-.tfex-muted {
-    opacity:.75;
-}
-</style>
-""", unsafe_allow_html=True)
-
-
-# ============================================================
-# SETTRADE CONNECTION
-# ============================================================
-
-def read_settrade():
     try:
-        return connect_read_only(st.secrets)
+        # Streamlit secrets behaves like a mapping.
+        cfg = secrets["settrade"]
 
-    except Exception as exc:
         return {
-            "configured": False,
-            "connected": False,
-            "sdk": {
-                "package": "settrade-v2",
-                "version": "unknown",
-                "import": "ERROR",
-            },
-            "account_info": None,
-            "portfolio": None,
-            "orders": None,
-            "errors": [
-                {
-                    "stage": "Application",
-                    "type": type(exc).__name__,
-                    "message": str(exc),
-                }
-            ],
+            "app_id": str(
+                cfg.get("app_id", "")
+            ).strip(),
+
+            "app_secret": str(
+                cfg.get("app_secret", "")
+            ).strip(),
+
+            "broker_id": str(
+                cfg.get("broker_id", "SANDBOX")
+            ).strip(),
+
+            "app_code": str(
+                cfg.get("app_code", "SANDBOX")
+            ).strip(),
+
+            "derivatives_account": str(
+                cfg.get(
+                    "derivatives_account",
+                    "Nobody-D",
+                )
+            ).strip(),
+        }
+
+    except Exception:
+        return empty
+
+
+def _error_details(exc: Exception) -> Dict[str, Any]:
+
+    result = {
+        "type": type(exc).__name__,
+        "message": str(exc),
+    }
+
+    for attr in (
+        "code",
+        "status_code",
+    ):
+        value = getattr(exc, attr, None)
+
+        if value is not None:
+            result[attr] = value
+
+    response = getattr(exc, "response", None)
+
+    if response is not None:
+
+        try:
+            result["response_status"] = (
+                response.status_code
+            )
+        except Exception:
+            pass
+
+        try:
+            result["response_text"] = (
+                response.text[:3000]
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+def _sdk_metadata() -> Dict[str, Any]:
+
+    try:
+        import importlib.metadata as metadata
+
+        try:
+            version = metadata.version(
+                "settrade-v2"
+            )
+        except Exception:
+            version = "unknown"
+
+        return {
+            "package": "settrade-v2",
+            "version": version,
+            "import": "settrade_v2",
+        }
+
+    except Exception:
+
+        return {
+            "package": "settrade-v2",
+            "version": "unknown",
+            "import": "ERROR",
         }
 
 
-state = read_settrade()
-cfg = load_config(st.secrets)
+def connect_read_only(secrets) -> Dict[str, Any]:
 
+    state = {
+        "configured": False,
+        "connected": False,
 
-# ============================================================
-# DIAGNOSTIC PANEL
-# ============================================================
+        "sdk": {
+            "package": "settrade-v2",
+            "version": "unknown",
+            "import": "ERROR",
+        },
 
-with st.expander(
-    "🔌 Settrade Sandbox connection diagnostic",
-    expanded=not state.get("connected", False),
-):
+        "account_info": None,
+        "portfolio": None,
+        "orders": None,
 
-    configured = bool(state.get("configured"))
-    connected = bool(state.get("connected"))
-    sdk_ok = bool(
-        state.get("sdk", {}).get("import")
-        and state.get("sdk", {}).get("import") != "ERROR"
-    )
+        "errors": [],
+    }
 
-    st.markdown(
-        f"""
-        <div class="tfex-diag">
-            <div>
-                Environment:
-                <b>{cfg.get("app_code") or "—"}</b>
-            </div>
+    # ========================================================
+    # CONFIG
+    # ========================================================
 
-            <div>
-                Broker:
-                <b>{cfg.get("broker_id") or "—"}</b>
-            </div>
+    cfg = load_config(secrets)
 
-            <div>
-                Derivatives account:
-                <b>{cfg.get("derivatives_account") or "—"}</b>
-            </div>
+    required = [
+        "app_id",
+        "app_secret",
+        "broker_id",
+        "app_code",
+        "derivatives_account",
+    ]
 
-            <br>
+    missing = [
+        key
+        for key in required
+        if not cfg.get(key)
+    ]
 
-            <div>
-                Secrets configured:
-                <span class="{'tfex-ok' if configured else 'tfex-bad'}">
-                    {'YES' if configured else 'NO'}
-                </span>
-            </div>
+    if missing:
 
-            <div>
-                SDK / Import:
-                <span class="{'tfex-ok' if sdk_ok else 'tfex-bad'}">
-                    {state.get("sdk", {}).get("import", "ERROR")}
-                </span>
-            </div>
+        state["errors"].append({
+            "stage": "Configuration",
+            "type": "ConfigurationError",
+            "message": "Missing Settrade configuration.",
+            "missing": missing,
+        })
 
-            <div>
-                Connection:
-                <span class="{'tfex-ok' if connected else 'tfex-bad'}">
-                    {'CONNECTED' if connected else 'NOT CONNECTED'}
-                </span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        return state
 
+    state["configured"] = True
 
-    # --------------------------------------------------------
-    # Errors
-    # --------------------------------------------------------
+    # ========================================================
+    # SDK IMPORT
+    # ========================================================
 
-    errors = state.get("errors") or []
+    try:
 
-    if errors:
+        from settrade_v2 import Investor
 
-        st.error("Settrade returned an error:")
+        state["sdk"] = _sdk_metadata()
 
-        for error in errors:
+    except Exception as exc:
 
-            if isinstance(error, dict):
-                st.code(
-                    json.dumps(
-                        error,
-                        ensure_ascii=False,
-                        indent=2,
-                        default=str,
-                    ),
-                    language="json",
-                )
-            else:
-                st.code(
-                    str(error),
-                    language=None,
-                )
+        state["errors"].append({
+            "stage": "SDK Import",
+            **_error_details(exc),
+        })
 
-    else:
+        return state
 
-        st.success(
-            "Settrade read-only connection is healthy."
+    # ========================================================
+    # INVESTOR
+    # ========================================================
+
+    try:
+
+        investor = Investor(
+            app_id=cfg["app_id"],
+            app_secret=cfg["app_secret"],
+            broker_id=cfg["broker_id"],
+            app_code=cfg["app_code"],
+            is_auto_queue=False,
         )
 
+    except Exception as exc:
 
-    # --------------------------------------------------------
-    # SDK metadata
-    # --------------------------------------------------------
+        state["errors"].append({
+            "stage": "Create Investor",
+            **_error_details(exc),
+        })
 
-    sdk_meta = state.get("sdk") or {}
+        return state
 
-    if sdk_meta:
+    # ========================================================
+    # DERIVATIVES
+    # ========================================================
 
-        st.caption(
-            f"SDK package: "
-            f"{sdk_meta.get('package', '—')} | "
-            f"version: "
-            f"{sdk_meta.get('version', '—')} | "
-            f"import: "
-            f"{sdk_meta.get('import', '—')}"
+    try:
+
+        deri = investor.Derivatives(
+            account_no=cfg[
+                "derivatives_account"
+            ]
         )
 
+    except Exception as exc:
 
-    # --------------------------------------------------------
-    # Metrics
-    # --------------------------------------------------------
+        state["errors"].append({
+            "stage": "Create Derivatives",
+            **_error_details(exc),
+        })
 
-    c1, c2, c3 = st.columns(3)
+        return state
 
-    with c1:
+    # ========================================================
+    # ACCOUNT INFO
+    # ========================================================
 
-        st.metric(
-            "Account info",
-            "OK" if state.get("account_info") else "—",
+    try:
+
+        state["account_info"] = (
+            deri.get_account_info()
         )
 
-    with c2:
+    except Exception as exc:
 
-        portfolio = state.get("portfolio")
+        state["errors"].append({
+            "stage": "get_account_info",
+            **_error_details(exc),
+        })
 
-        st.metric(
-            "Portfolio",
-            len(portfolio)
-            if isinstance(portfolio, list)
-            else ("OK" if portfolio else "—"),
+        return state
+
+    state["connected"] = True
+
+    # ========================================================
+    # PORTFOLIO
+    # ========================================================
+
+    try:
+
+        state["portfolio"] = (
+            deri.get_portfolio()
         )
 
-    with c3:
+    except Exception as exc:
 
-        orders = state.get("orders")
+        state["errors"].append({
+            "stage": "get_portfolio",
+            **_error_details(exc),
+        })
 
-        st.metric(
-            "Orders",
-            len(orders)
-            if isinstance(orders, list)
-            else ("OK" if orders else "—"),
+    # ========================================================
+    # ORDERS
+    # ========================================================
+
+    try:
+
+        state["orders"] = (
+            deri.list_orders()
         )
 
+    except Exception as exc:
 
-    st.caption(
-        "Read-only mode. "
-        "No order placement or cancellation is implemented."
-    )
+        state["errors"].append({
+            "stage": "list_orders",
+            **_error_details(exc),
+        })
 
-
-    # --------------------------------------------------------
-    # Refresh
-    # --------------------------------------------------------
-
-    if st.button(
-        "🔄 Refresh Settrade connection",
-        key="refresh_settrade",
-    ):
-
-        st.rerun()
-
-
-# ============================================================
-# EXISTING TRADING TERMINAL
-# ============================================================
-
-html_path = Path(__file__).with_name("index.html")
-
-html = html_path.read_text(
-    encoding="utf-8"
-)
-
-
-# ============================================================
-# INJECT TFEX STATE
-# ============================================================
-
-state_json = json.dumps(
-    state,
-    ensure_ascii=False,
-    separators=(",", ":"),
-    default=str,
-)
-
-
-html = html.replace(
-    "</head>",
-    (
-        f"<script>"
-        f"window.__TFEX_STATE__ = {state_json};"
-        f"</script>"
-        f"</head>"
-    ),
-    1,
-)
-
-
-# ============================================================
-# RENDER ORIGINAL TERMINAL
-# ============================================================
-
-components.html(
-    html,
-    height=2400,
-    scrolling=False,
-)
+    return state
