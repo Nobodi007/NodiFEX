@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TFEX Terminal — Trading Journal</title>
+<style>
+:root{
+ --bg:#080b10;--panel:#0e131b;--panel2:#111822;--line:#202936;--text:#eef3f8;
+ --muted:#8491a3;--green:#27d17f;--red:#ff5d6c;--blue:#5b8cff;--amber:#f6c453;
+}
+*{box-sizing:border-box} html,body{width:100%;min-width:0} body{margin:0;background:radial-gradient(circle at 75% -10%,#18233a 0,#080b10 38%);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+button,input,select{font:inherit} button{cursor:pointer}
+.app{display:flex;width:100%;max-width:100%;overflow-x:hidden}.side{width:230px;border-right:1px solid var(--line);background:rgba(8,11,16,.96);padding:22px 14px;position:fixed;top:42px;bottom:0;left:0}
+.logo{font-weight:800;font-size:19px;padding:8px 10px 25px;white-space:nowrap}.logo span{color:var(--blue)}
+.nav{display:grid;gap:5px}.nav button{border:0;background:none;color:var(--muted);padding:11px 12px;text-align:left;border-radius:9px}.nav button.active,.nav button:hover{background:#151c27;color:white}
+.mode{position:absolute;bottom:18px;left:14px;right:14px;border:1px solid #273244;background:#0e141d;border-radius:10px;padding:12px}.dot{display:inline-block;width:7px;height:7px;background:var(--amber);border-radius:50%;margin-right:7px}.small{font-size:11px;color:var(--muted)}
+main{margin-left:230px;width:calc(100% - 230px);min-width:0;padding:28px 32px 48px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}.title h1{margin:0;font-size:25px}.title p{margin:5px 0 0;color:var(--muted);font-size:13px}
+.primary{background:#fff;color:#080b10;border:0;border-radius:9px;padding:10px 15px;font-weight:750}.primary:hover{transform:translateY(-1px)}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}.card{background:linear-gradient(180deg,#101721,#0d131b);border:1px solid var(--line);border-radius:13px;padding:17px}.label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.value{font-size:24px;font-weight:760;margin-top:9px}.green{color:var(--green)}.red{color:var(--red)}
+.grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,.9fr);gap:16px;margin-top:16px}.panel{background:rgba(14,19,27,.9);border:1px solid var(--line);border-radius:13px;overflow:hidden}.ph{padding:16px 17px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.ph h2{font-size:14px;margin:0}.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:13px 17px;border-bottom:1px solid #1a222e;font-size:12px}th{color:#788597;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.06em}tr:last-child td{border-bottom:0}.sym{font-weight:750}.pill{font-size:10px;padding:4px 7px;border-radius:5px;font-weight:700}.long{color:var(--green);background:#0d2a20}.short{color:var(--red);background:#32151a}
+.chart{height:250px;padding:10px 17px 18px;display:flex;align-items:end;gap:5px}.bar{flex:1;background:linear-gradient(to top,#2459c8,#5b8cff);opacity:.8;border-radius:3px 3px 0 0;min-width:5px}.bar.neg{background:linear-gradient(to top,#8b2632,#ff5d6c)}.chart-wrap{height:100%;display:flex;flex-direction:column;justify-content:end;width:100%}.axis{border-top:1px solid #25303e;margin-top:5px}
+.empty{padding:35px;text-align:center;color:var(--muted)}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;padding:18px;z-index:5}.modal.show{display:flex}.dialog{width:460px;max-width:100%;background:#0e141d;border:1px solid #293342;border-radius:15px;box-shadow:0 20px 80px #000;padding:20px}.dialog h2{margin:0 0 18px;font-size:18px}.field{margin-bottom:13px}.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}.field input,.field select{width:100%;background:#080d14;border:1px solid #293342;color:#fff;border-radius:8px;padding:10px;outline:none}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sidebtn{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px}.sidebtn button{padding:10px;border:1px solid #2a3442;background:#0a1017;color:var(--muted);border-radius:8px;font-weight:700}.sidebtn button.sel-long{border-color:#219d62;color:var(--green);background:#0d241b}.sidebtn button.sel-short{border-color:#a83b47;color:var(--red);background:#2a1217}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.ghost{background:#151d28;color:#d5dce5;border:1px solid #293342;border-radius:8px;padding:10px 14px}
+.view{display:none}.view.active-view{display:block}.toast{position:fixed;right:22px;bottom:22px;background:#151d28;border:1px solid #334054;border-radius:9px;padding:12px 15px;display:none;z-index:10;font-size:12px}
+
+.analytics-tabs{display:flex;gap:6px;flex-wrap:wrap}.analytics-tabs button{background:#0a1017;border:1px solid #293342;color:#8996a8;border-radius:8px;padding:8px 13px;font-size:11px;font-weight:700}.analytics-tabs button.active{background:#1a2432;color:#fff;border-color:#46566e}
+.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric-grid .card{min-height:98px}.metric-sub{font-size:11px;color:var(--muted);margin-top:7px}
+.analytics-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);gap:16px;margin-top:16px}.analytics-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
+.stat-table th,.stat-table td{padding:11px 13px}.stat-table td:last-child,.stat-table th:last-child{text-align:right}.barline{height:8px;background:#18212c;border-radius:99px;overflow:hidden;min-width:70px}.barline>span{display:block;height:100%;background:var(--blue);border-radius:99px}.positive{color:var(--green)}.negative{color:var(--red)}
+.equity-placeholder{height:250px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #1a222e;background:linear-gradient(180deg,rgba(20,30,45,.45),rgba(8,11,16,.1));color:var(--muted);font-size:12px}.chart-grid{height:100%;width:100%;display:flex;align-items:flex-end;gap:5px;padding:22px 18px 10px}.chart-grid .bar-empty{flex:1;height:5px;background:#25303e;border-radius:4px}
+.calendar-head{display:flex;justify-content:space-between;align-items:center;padding:16px 17px}.calendar-title{font-weight:750}.calendar-controls{display:flex;gap:5px}.calendar-controls button{background:#0a1017;border:1px solid #293342;color:#a5b1c1;border-radius:7px;padding:5px 9px}.calendar{padding:0 14px 16px}.calendar-week,.calendar-days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.calendar-week div{text-align:center;color:#6f7d8e;font-size:10px;padding:6px 0}.cal-day{min-height:74px;border:1px solid #1e2835;border-radius:9px;background:#0b1118;padding:8px;display:flex;flex-direction:column;justify-content:space-between}.cal-day.empty-day{opacity:.35;background:transparent}.cal-day .num{font-size:11px;color:#8b98a9}.cal-day .cal-pnl{font-size:12px;font-weight:750;color:#6f7d8e}.cal-day.has-data{border-color:#244c3c}.cal-day.has-data .cal-pnl.positive{color:var(--green)}.cal-day.has-data .cal-pnl.negative{color:var(--red)}
+.trade-log-wrap{overflow-x:auto;overflow-y:hidden;max-width:100%}.trade-log{min-width:1050px}.trade-log th,.trade-log td{white-space:nowrap}.empty-big{padding:50px 25px;text-align:center;color:var(--muted)}.empty-big .empty-title{font-weight:750;color:#c5ced9;margin-bottom:6px}.filter-row{display:flex;gap:8px;flex-wrap:wrap}.filter-row select,.filter-row input{background:#080d14;border:1px solid #293342;color:#cfd7e2;border-radius:8px;padding:8px 10px;font-size:11px}
+@media(max-width:1100px){.metric-grid{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.analytics-grid,.analytics-grid-3{grid-template-columns:1fr}}
+@media(max-width:900px){.analytics-grid,.analytics-grid-3{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.side{width:65px;padding:15px 8px;top:42px}.logo{font-size:0}.logo span{font-size:20px}.nav button{font-size:0;text-align:center}.side .mode{display:none}main{margin-left:65px;width:calc(100% - 65px);padding:20px}.cards{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+@media(max-width:600px){.cards{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.top .primary{padding:9px}.hide-mobile{display:none}th:nth-child(4),td:nth-child(4){display:none}}
+</style>
+</head>
+<body>
+<div style="background:#161b22;border-bottom:1px solid #30363d;padding:10px 18px;color:#8b949e;font-size:13px"><b style="color:#f0f6fc">ACCOUNT MODE:</b> LIVE ACCOUNT SHELL &nbsp;•&nbsp; <span style="color:#f85149">TFEX API NOT CONNECTED</span> &nbsp;•&nbsp; Demo data removed. No orders will be sent.
+</div>
+<div class="app">
+<aside class="side">
+  <div class="logo">TFEX <span>TERMINAL</span></div>
+  <div class="nav">
+    <button class="active" data-view="dashboard" onclick="nav('dashboard',this)">◈ &nbsp; Dashboard</button>
+    <button data-view="orders" onclick="nav('orders',this)">▣ &nbsp; Orders</button>
+    <button data-view="positions" onclick="nav('positions',this)">◉ &nbsp; Positions</button>
+    <button data-view="journal" onclick="nav('journal',this)">↗ &nbsp; Journal</button>
+    <button data-view="analytics" onclick="nav('analytics',this)">⌁ &nbsp; Analytics</button>
+  </div>
+  <div class="mode"><span class="dot"></span><b style="font-size:11px">LIVE ACCOUNT SHELL</b><div class="small" style="margin-top:5px">Read-only until TFEX API is connected.</div></div>
+</aside>
+<main>
+  <section id="view-dashboard" class="view active-view">
+  <div class="top">
+    <div class="title"><h1>Dashboard</h1><p>Trading Journal · Wednesday, 7 October 2026</p></div>
+    <button class="primary" onclick="openModal()">＋ New Order</button>
+  </div>
+
+  <section class="cards">
+    <div class="card"><div class="label">Portfolio Value</div><div class="value" id="portfolio">—</div><div class="small">Equity</div></div>
+    <div class="card"><div class="label">Margin Used</div><div class="value" id="margin">—</div><div class="small">Settrade account</div></div>
+    <div class="card"><div class="label">Unrealized P/L</div><div class="value green" id="unreal">—</div><div class="small">Open positions</div></div>
+    <div class="card"><div class="label">Realized P/L</div><div class="value green" id="realized">—</div><div class="small">Account</div></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="ph"><h2>Open Positions</h2><span class="small" id="posCount">—</span></div>
+      <table><thead><tr><th>Contract</th><th>Side</th><th>Qty</th><th>Avg Price</th><th>Last</th><th>P/L</th></tr></thead>
+      <tbody id="positions"></tbody></table>
+      <div id="noPos" class="empty" style="display:none">No open positions. Add an order to start.</div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Recent Orders</h2><span class="small" id="orderCount">—</span></div>
+      <table><thead><tr><th>Time</th><th>Contract</th><th>Side</th><th>Qty</th></tr></thead><tbody id="orders"></tbody></table>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="ph"><h2>P/L Performance</h2><span class="small">Last 30 days</span></div>
+      <div class="empty" id="chart">No P/L history — waiting for TFEX account connection.</div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Quick Journal</h2><span class="small">Latest notes</span></div>
+      <div style="padding:18px">
+        <div style="font-weight:700;font-size:13px">No journal entries</div>
+        <div class="small" style="margin-top:6px;line-height:1.6">Waiting for real TFEX executions.</div>
+      </div>
+    </section>
+  </div>
+
+<div class="grid" style="margin-top:16px">
+<section class="panel">
+<div class="ph"><h2>Trade History & Statistics</h2><span class="small">Real closed trades only</span></div>
+<div class="cards" style="padding:14px">
+<div class="card"><div class="label">Win Rate</div><div class="value">—</div></div>
+<div class="card"><div class="label">Profit Factor</div><div class="value">—</div></div>
+<div class="card"><div class="label">Expectancy</div><div class="value">—</div></div>
+<div class="card"><div class="label">Avg R</div><div class="value">—</div></div>
+<div class="card"><div class="label">Max DD</div><div class="value">—</div></div>
+</div>
+<table><thead><tr><th>Date</th><th>Contract</th><th>Side</th><th>Entry</th><th>Exit</th><th>P/L</th><th>R</th><th>Result</th></tr></thead><tbody id="tradeHistory"></tbody></table>
+</section>
+<section class="panel">
+<div class="ph"><h2>Performance by Setup</h2><span class="small">Real data only</span></div>
+<div class="empty">No closed trades yet. Setup statistics will appear after TFEX executions are synced.</div>
+</section>
+</div>
+<div class="panel" style="margin-top:16px"><div class="ph"><h2>Order History</h2><span class="small">Every execution</span></div>
+<table><thead><tr><th>Time</th><th>Contract</th><th>Action</th><th>Qty</th><th>Price</th><th>Status</th><th>Note</th></tr></thead><tbody id="orderHistory"></tbody></table></div>
+  </section>
+
+  <section id="view-orders" class="view">
+    <div class="top"><div class="title"><h1>Orders</h1><p>Orders returned by the connected TFEX account</p></div><button class="primary" onclick="openModal()">＋ New Order</button></div>
+    <div class="panel"><div class="ph"><h2>Order History</h2><span class="small">Live account data</span></div>
+      <table><thead><tr><th>Time</th><th>Contract</th><th>Action</th><th>Qty</th><th>Price</th><th>Status</th><th>Note</th></tr></thead><tbody id="orderHistoryFull"></tbody></table>
+    </div>
+    <div class="panel" style="margin-top:16px"><div class="empty">TFEX API is not connected. No order data is loaded.</div></div>
+  </section>
+
+  <section id="view-positions" class="view">
+    <div class="top"><div class="title"><h1>Positions</h1><p>Current open positions from the connected TFEX account</p></div></div>
+    <div class="panel"><div class="ph"><h2>Open Positions</h2><span class="small">Live account data</span></div>
+      <table><thead><tr><th>Contract</th><th>Side</th><th>Qty</th><th>Avg Price</th><th>Last</th><th>P/L</th></tr></thead><tbody id="positionsFull"></tbody></table>
+      <div class="empty">TFEX API is not connected. No positions are loaded.</div>
+    </div>
+  </section>
+
+  <section id="view-journal" class="view">
+    <div class="top"><div class="title"><h1>Journal</h1><p>Trade notes, setup, emotion, confidence and execution review</p></div></div>
+    <div class="panel"><div class="ph"><h2>Trade Journal</h2><span class="small">No fake records</span></div>
+      <div class="empty">No journal entries yet. Journal records will appear after real TFEX executions are available.</div>
+    </div>
+  </section>
+
+  <section id="view-analytics" class="view">
+    <div class="top">
+      <div class="title"><h1>Analytics</h1><p>Deep trading performance — calculated only from real TFEX executions</p></div>
+      <div class="analytics-tabs">
+        <button class="active" onclick="setAnalyticsPeriod('day',this)">Day</button>
+        <button onclick="setAnalyticsPeriod('week',this)">Week</button>
+        <button onclick="setAnalyticsPeriod('month',this)">Month</button>
+        <button onclick="setAnalyticsPeriod('year',this)">Year</button>
+        <button onclick="setAnalyticsPeriod('all',this)">All time</button>
+      </div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="card"><div class="label">Win Rate</div><div class="value" id="aWinRate">—</div><div class="metric-sub" id="aWinRateSub">No closed trades</div></div>
+      <div class="card"><div class="label">Net P/L</div><div class="value" id="aNetPnl">—</div><div class="metric-sub">Realized closed trades</div></div>
+      <div class="card"><div class="label">Profit Factor</div><div class="value" id="aPF">—</div><div class="metric-sub">Gross profit ÷ gross loss</div></div>
+      <div class="card"><div class="label">Expectancy / Trade</div><div class="value" id="aExpectancy">—</div><div class="metric-sub">Average P/L per trade</div></div>
+      <div class="card"><div class="label">Average R</div><div class="value" id="aAvgR">—</div><div class="metric-sub">P/L ÷ initial risk</div></div>
+      <div class="card"><div class="label">Max Drawdown</div><div class="value" id="aMaxDD">—</div><div class="metric-sub">From realized equity curve</div></div>
+      <div class="card"><div class="label">Closed Trades</div><div class="value" id="aTrades">—</div><div class="metric-sub">Completed entry → exit</div></div>
+      <div class="card"><div class="label">Avg Hold Time</div><div class="value" id="aHold">—</div><div class="metric-sub">Entry → final close</div></div>
+    </div>
+
+    <div class="analytics-grid">
+      <section class="panel">
+        <div class="ph"><h2>Win Rate by Period</h2><span class="small" id="periodLabel">Day</span></div>
+        <div class="empty-big" id="periodEmpty"><div class="empty-title">No trade data yet</div>Daily / weekly / monthly win rate will appear here after TFEX trades are synced.</div>
+        <table class="stat-table" id="periodTable" style="display:none"><thead><tr><th>Period</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>Net P/L</th></tr></thead><tbody></tbody></table>
+      </section>
+      <section class="panel">
+        <div class="ph"><h2>Holding Time</h2><span class="small">Entry → Close</span></div>
+        <table class="stat-table"><tbody>
+          <tr><td>Average hold</td><td id="holdAvg">—</td></tr>
+          <tr><td>Median hold</td><td id="holdMedian">—</td></tr>
+          <tr><td>Shortest hold</td><td id="holdMin">—</td></tr>
+          <tr><td>Longest hold</td><td id="holdMax">—</td></tr>
+          <tr><td>Intraday trades</td><td id="holdIntraday">—</td></tr>
+          <tr><td>Overnight trades</td><td id="holdOvernight">—</td></tr>
+        </tbody></table>
+        <div class="empty-big" id="holdEmpty" style="padding:25px">Waiting for real entry / exit timestamps.</div>
+      </section>
+    </div>
+
+    <div class="analytics-grid-3">
+      <section class="panel">
+        <div class="ph"><h2>Win Rate by Time</h2><span class="small">Entry hour</span></div>
+        <table class="stat-table"><thead><tr><th>Time</th><th>Trades</th><th>Win Rate</th></tr></thead><tbody id="timeStats"><tr><td colspan="3" class="muted" style="text-align:center;padding:28px">No trade data</td></tr></tbody></table>
+      </section>
+      <section class="panel">
+        <div class="ph"><h2>Win Rate by Asset</h2><span class="small">Contract</span></div>
+        <table class="stat-table"><thead><tr><th>Asset</th><th>Trades</th><th>Win Rate</th></tr></thead><tbody id="assetStats"><tr><td colspan="3" class="muted" style="text-align:center;padding:28px">No trade data</td></tr></tbody></table>
+      </section>
+      <section class="panel">
+        <div class="ph"><h2>Win Rate by Side</h2><span class="small">Long / Short</span></div>
+        <table class="stat-table"><thead><tr><th>Side</th><th>Trades</th><th>Win Rate</th></tr></thead><tbody id="sideStats"><tr><td colspan="3" class="muted" style="text-align:center;padding:28px">No trade data</td></tr></tbody></table>
+      </section>
+    </div>
+
+    <div class="analytics-grid-3">
+      <section class="panel">
+        <div class="ph"><h2>Win Rate by Day of Week</h2><span class="small">Entry day</span></div>
+        <table class="stat-table"><thead><tr><th>Day</th><th>Trades</th><th>Win Rate</th></tr></thead><tbody id="dowStats"><tr><td colspan="3" class="muted" style="text-align:center;padding:28px">No trade data</td></tr></tbody></table>
+      </section>
+      <section class="panel">
+        <div class="ph"><h2>Risk / Reward</h2><span class="small">Trade quality</span></div>
+        <table class="stat-table"><tbody>
+          <tr><td>Planned RR</td><td id="plannedRR">—</td></tr>
+          <tr><td>Realized Avg R</td><td id="realizedRR">—</td></tr>
+          <tr><td>Best R</td><td id="bestR">—</td></tr>
+          <tr><td>Worst R</td><td id="worstR">—</td></tr>
+          <tr><td>Win Avg R</td><td id="winR">—</td></tr>
+          <tr><td>Loss Avg R</td><td id="lossR">—</td></tr>
+        </tbody></table>
+      </section>
+      <section class="panel">
+        <div class="ph"><h2>Equity Curve</h2><span class="small">Realized P/L</span></div>
+        <div class="equity-placeholder"><div>No equity history yet — synced closed trades will build the curve automatically.</div></div>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="calendar-head"><div><div class="calendar-title" id="calendarTitle">October 2026</div><div class="small">Daily realized P/L calendar — empty until real trades are synced</div></div><div class="calendar-controls"><button onclick="shiftCalendar(-1)">‹</button><button onclick="shiftCalendar(1)">›</button></div></div>
+      <div class="calendar"><div class="calendar-week"><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div></div><div class="calendar-days" id="tradeCalendar"></div></div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="ph"><h2>Trade Log</h2><span class="small">Entry → Hold → Exit · Real TFEX trades only</span></div>
+      <div class="filter-row" style="padding:12px 17px;border-bottom:1px solid var(--line)">
+        <select id="logAsset"><option value="">All assets</option></select>
+        <select id="logSide"><option value="">All sides</option><option>LONG</option><option>SHORT</option></select>
+        <select id="logResult"><option value="">All results</option><option>WIN</option><option>LOSS</option><option>BE</option></select>
+        <input id="logSearch" placeholder="Search setup / note">
+      </div>
+      <div class="trade-log-wrap">
+        <table class="trade-log"><thead><tr><th>Date</th><th>Contract</th><th>Side</th><th>Entry Time</th><th>Entry</th><th>Exit Time</th><th>Exit</th><th>Hold</th><th>Qty</th><th>P/L</th><th>R</th><th>Result</th><th>Setup</th><th>Note</th></tr></thead><tbody id="tradeLog"><tr><td colspan="14" class="muted" style="text-align:center;padding:42px">No trade records — waiting for real TFEX executions.</td></tr></tbody></table>
+      </div>
+    </section>
+  </section>
+
+</main>
+</div>
+
+<div class="modal" id="modal">
+ <div class="dialog">
+  <h2>New Order</h2>
+  <div class="field"><label>Contract</label><input id="contract" placeholder="e.g. S50Z26"></div>
+  <div class="sidebtn"><button id="longBtn" class="sel-long" onclick="setSide('LONG')">LONG</button><button id="shortBtn" onclick="setSide('SHORT')">SHORT</button></div>
+  <div class="row">
+   <div class="field"><label>Quantity</label><input id="qty" type="number" min="1" value="1"></div>
+   <div class="field"><label>Price</label><input id="price" type="number" step="0.01" placeholder="Market / limit price"></div>
+  </div>
+  <div class="row">
+   <div class="field"><label>Stop Loss (optional)</label><input id="sl" type="number" step="0.01" placeholder="—"></div>
+   <div class="field"><label>Take Profit (optional)</label><input id="tp" type="number" step="0.01" placeholder="—"></div>
+  </div>
+  <div class="field"><label>Note</label><input id="note" placeholder="Why did you take this trade?"></div>
+  <div class="actions"><button class="ghost" onclick="closeModal()">Cancel</button><button class="primary" onclick="addOrder()">Add Order</button></div>
+ </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let side='LONG';
+// Live-account shell: no demo positions/orders. Data will be populated by TFEX API.
+let positions=[];
+let orders=[];
+function pnl(p){return 0}
+function render(){
+ let tb=document.getElementById('positions');tb.innerHTML='';
+ let total=0;
+ positions.forEach(p=>{let x=pnl(p);total+=x;tb.innerHTML+=`<tr><td class="sym">${p.c}</td><td><span class="pill ${p.s==='LONG'?'long':'short'}">${p.s}</span></td><td>${p.q}</td><td>${p.avg.toLocaleString()}</td><td>${p.last.toLocaleString()}</td><td class="${x>=0?'green':'red'}">${x>=0?'+':''}฿${Math.round(x).toLocaleString()}</td></tr>`});
+ document.getElementById('noPos').style.display=positions.length?'none':'block';
+ document.getElementById('posCount').textContent=positions.length+' positions';
+ document.getElementById('unreal').textContent=positions.length?'฿'+Math.abs(Math.round(total)).toLocaleString():'—';
+ let ob=document.getElementById('orders');ob.innerHTML='';
+ orders.slice(0,6).forEach(o=>ob.innerHTML+=`<tr><td class="muted">${o.t}</td><td class="sym">${o.c}</td><td><span class="pill ${o.s==='BUY'?'long':'short'}">${o.s}</span></td><td>${o.q}</td></tr>`);
+}
+function openModal(){document.getElementById('modal').classList.add('show')}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function setSide(x){side=x;document.getElementById('longBtn').className=x==='LONG'?'sel-long':'';document.getElementById('shortBtn').className=x==='SHORT'?'sel-short':''}
+function addOrder(){
+ toast('Live API is not connected yet — order was NOT sent');
+}
+function toast(s){let t=document.getElementById('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',1800)}
+function nav(view,el){
+  document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active-view'));
+  const target=document.getElementById('view-'+view);
+  if(target) target.classList.add('active-view');
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(view==='orders') renderOrderHistoryFull();
+  if(view==='positions') renderPositionsFull();
+}
+
+function tfexState(){return window.__TFEX_STATE__||{configured:false,connected:false,errors:['No server state']};}
+function pickObj(obj, keys){if(!obj||typeof obj!=='object')return null;for(const k of keys){if(obj[k]!==undefined&&obj[k]!==null&&obj[k]!=='')return obj[k];}return null;}
+function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'฿'+Math.round(n).toLocaleString():'—';}
+function num(v){const n=Number(v);return Number.isFinite(n)?n:null;}
+function arrFrom(x){if(Array.isArray(x))return x;if(x&&typeof x==='object'){for(const k of ['data','orders','order_list','portfolio','positions','items','result'])if(Array.isArray(x[k]))return x[k];}return [];}
+function normalizePosition(x){return {contract:pickObj(x,['symbol','contract','instrument','series'])??'—',side:pickObj(x,['side','position_side','position'])??'—',qty:num(pickObj(x,['quantity','qty','volume','position']))??0,avg:num(pickObj(x,['avg_price','average_price','avgPrice','averagePrice']))??null,last:num(pickObj(x,['last','last_price','market_price']))??null,pnl:num(pickObj(x,['unrealized_pnl','unrealizedPnl','pnl']))??null};}
+function normalizeOrder(x){return {time:pickObj(x,['order_time','created_at','timestamp','time'])??'—',contract:pickObj(x,['symbol','contract','instrument'])??'—',side:pickObj(x,['side','action'])??'—',qty:num(pickObj(x,['volume','quantity','qty']))??0,price:num(pickObj(x,['price','order_price']))??null,status:pickObj(x,['status','order_status'])??'—',note:pickObj(x,['order_no','order_number','orderNo'])??''};}
+function applyTfexState(){
+ const st=tfexState(), status=document.getElementById('apiStatus');
+ if(status){status.textContent=st.connected?'● SETTRADE SANDBOX CONNECTED':(st.configured?'● SETTRADE CONNECTION ERROR':'● TFEX API NOT CONFIGURED');status.style.color=st.connected?'#3fb950':'#f85149';}
+ const info=st.account_info||{};
+ const portfolio=st.portfolio||{};
+ const pObj=(portfolio&&typeof portfolio==='object'&&portfolio.data)?portfolio.data:portfolio;
+ const equity=pickObj(info,['equity','account_equity','total_equity','net_asset_value'])??pickObj(pObj,['equity','total_value','total_value_thb','net_asset_value']);
+ const margin=pickObj(info,['margin_used','used_margin','initial_margin'])??pickObj(pObj,['margin_used','used_margin','initial_margin']);
+ const realized=pickObj(info,['realized_pnl','realizedPnl','realized_profit_loss']);
+ const unreal=pickObj(info,['unrealized_pnl','unrealizedPnl','unrealized_profit_loss'])??pickObj(pObj,['unrealized_pnl','unrealizedPnl']);
+ const pe=document.getElementById('portfolio');if(pe)pe.textContent=money(equity);
+ const me=document.getElementById('margin');if(me)me.textContent=money(margin);
+ const re=document.getElementById('realized');if(re)re.textContent=money(realized);
+ const ue=document.getElementById('unreal');if(ue)ue.textContent=money(unreal);
+ const positions=arrFrom(pObj).map(normalizePosition).filter(x=>x.qty!==0);
+ const orders=arrFrom(st.orders).map(normalizeOrder);
+ const pc=document.getElementById('posCount');if(pc)pc.textContent=positions.length+' positions';
+ const oc=document.getElementById('orderCount');if(oc)oc.textContent=orders.length+' orders';
+ window.__TFEX_POSITIONS__=positions;window.__TFEX_ORDERS__=orders;
+ renderDashboardRows();renderPositionsFull();renderOrderHistoryFull();
+}
+function renderDashboardRows(){
+ const positions=window.__TFEX_POSITIONS__||[],orders=window.__TFEX_ORDERS__||[];
+ const p=document.getElementById('positions');if(p)p.innerHTML=positions.length?positions.map(x=>`<tr><td class="sym">${x.contract}</td><td><span class="pill ${x.side==='LONG'?'long':'short'}">${x.side}</span></td><td>${x.qty}</td><td>${x.avg??'—'}</td><td>${x.last??'—'}</td><td class="${(x.pnl??0)>=0?'positive':'negative'}">${x.pnl===null?'—':money(x.pnl)}</td></tr>`).join(''):'<tr><td colspan="6" class="muted" style="text-align:center;padding:28px">No open positions from connected account</td></tr>';
+ const o=document.getElementById('orders');if(o)o.innerHTML=orders.slice(0,6).length?orders.slice(0,6).map(x=>`<tr><td class="muted">${x.time}</td><td class="sym">${x.contract}</td><td><span class="pill ${x.side==='BUY'||x.side==='LONG'?'long':'short'}">${x.side}</span></td><td>${x.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="muted" style="text-align:center;padding:28px">No orders returned by account</td></tr>';
+}
+
+function renderOrderHistoryFull(){
+ const o=document.getElementById('orderHistoryFull'); if(!o)return;
+ const rows=window.__TFEX_ORDERS__||[];
+ o.innerHTML=rows.length?rows.map(x=>`<tr><td class="muted">${x.time}</td><td class="sym">${x.contract}</td><td>${x.side}</td><td>${x.qty}</td><td>${x.price??'—'}</td><td>${x.status}</td><td>${x.note}</td></tr>`).join(''):'<tr><td colspan="7" class="muted" style="text-align:center;padding:28px">No order data returned by connected account</td></tr>';
+}
+function renderPositionsFull(){
+ const p=document.getElementById('positionsFull'); if(!p)return;
+ const rows=window.__TFEX_POSITIONS__||[];
+ p.innerHTML=rows.length?rows.map(x=>`<tr><td class="sym">${x.contract}</td><td>${x.side}</td><td>${x.qty}</td><td>${x.avg??'—'}</td><td>${x.last??'—'}</td><td>${x.pnl===null?'—':money(x.pnl)}</td></tr>`).join(''):'<tr><td colspan="6" class="muted" style="text-align:center;padding:28px">No position data returned by connected account</td></tr>';
+}
+let vals=[];
+let analyticsPeriod='day';
+let calendarDate=new Date(2026,9,1);
+const closedTrades=[]; // Intentionally empty. TFEX sync will populate this.
+
+function setAnalyticsPeriod(period,el){
+  analyticsPeriod=period;
+  document.querySelectorAll('.analytics-tabs button').forEach(b=>b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const labels={day:'Day',week:'Week',month:'Month',year:'Year',all:'All time'};
+  const x=document.getElementById('periodLabel'); if(x)x.textContent=labels[period];
+  renderAnalytics();
+}
+function fmtMoney(v){if(v===null||v===undefined||Number.isNaN(v))return '—'; return (v>=0?'+':'−')+'฿'+Math.abs(Math.round(v)).toLocaleString()}
+function fmtPct(v){return v===null||v===undefined||Number.isNaN(v)?'—':v.toFixed(1)+'%'}
+function fmtHold(mins){if(mins===null||mins===undefined||Number.isNaN(mins))return '—'; if(mins<60)return Math.round(mins)+'m'; const h=Math.floor(mins/60),m=Math.round(mins%60); return h+'h '+m+'m'}
+function renderStatRows(id,groups){const el=document.getElementById(id);if(!el)return; if(!groups.length){el.innerHTML='<tr><td colspan="3" class="muted" style="text-align:center;padding:28px">No trade data</td></tr>';return;} el.innerHTML=groups.map(g=>`<tr><td>${g.name}</td><td>${g.trades}</td><td>${fmtPct(g.wr)}</td></tr>`).join('')}
+function groupStats(keyFn){const map={}; closedTrades.forEach(t=>{const k=keyFn(t); if(!map[k])map[k]={name:k,trades:0,wins:0,pnl:0};map[k].trades++;if(t.result==='WIN')map[k].wins++;map[k].pnl+=Number(t.pnl||0)});return Object.values(map).map(x=>({...x,wr:x.trades?x.wins/x.trades*100:0}));}
+function renderAnalytics(){
+ const n=closedTrades.length;
+ const wins=closedTrades.filter(t=>t.result==='WIN'), losses=closedTrades.filter(t=>t.result==='LOSS');
+ const net=closedTrades.reduce((a,t)=>a+Number(t.pnl||0),0), grossWin=wins.reduce((a,t)=>a+Math.max(0,Number(t.pnl||0)),0), grossLoss=losses.reduce((a,t)=>a+Math.min(0,Number(t.pnl||0)),0);
+ const pf=grossLoss<0?grossWin/Math.abs(grossLoss):null, wr=n?wins.length/n*100:null, exp=n?net/n:null;
+ const avgR=n?closedTrades.reduce((a,t)=>a+Number(t.r||0),0)/n:null;
+ const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+ set('aWinRate',fmtPct(wr));set('aWinRateSub',n?`${wins.length} wins / ${losses.length} losses`:'No closed trades');set('aNetPnl',fmtMoney(net));set('aPF',pf===null?'—':pf.toFixed(2));set('aExpectancy',fmtMoney(exp));set('aAvgR',avgR===null?'—':(avgR>=0?'+':'')+avgR.toFixed(2)+'R');set('aMaxDD','—');set('aTrades',n||'—');
+ if(n){const holds=closedTrades.map(t=>Number(t.holdMin)).filter(Number.isFinite).sort((a,b)=>a-b);const avg=holds.reduce((a,b)=>a+b,0)/holds.length;set('aHold',fmtHold(avg));set('holdAvg',fmtHold(avg));set('holdMedian',fmtHold(holds[Math.floor(holds.length/2)]));set('holdMin',fmtHold(holds[0]));set('holdMax',fmtHold(holds[holds.length-1]));set('holdIntraday',closedTrades.filter(t=>!t.overnight).length);set('holdOvernight',closedTrades.filter(t=>t.overnight).length);document.getElementById('holdEmpty').style.display='none';} else {['aHold','holdAvg','holdMedian','holdMin','holdMax','holdIntraday','holdOvernight'].forEach(id=>set(id,'—'));document.getElementById('holdEmpty').style.display='block';}
+ const timeGroups=groupStats(t=>t.entryHour!==undefined?String(t.entryHour).padStart(2,'0')+':00':'—');renderStatRows('timeStats',timeGroups);
+ renderStatRows('assetStats',groupStats(t=>t.contract));renderStatRows('sideStats',groupStats(t=>t.side));renderStatRows('dowStats',groupStats(t=>t.dayName));
+ const rs=closedTrades.map(t=>Number(t.r)).filter(Number.isFinite);set('plannedRR','—');set('realizedRR',rs.length?(rs.reduce((a,b)=>a+b,0)/rs.length).toFixed(2)+'R':'—');set('bestR',rs.length?Math.max(...rs).toFixed(2)+'R':'—');set('worstR',rs.length?Math.min(...rs).toFixed(2)+'R':'—');const wrs=closedTrades.filter(t=>t.result==='WIN').map(t=>Number(t.r));const lrs=closedTrades.filter(t=>t.result==='LOSS').map(t=>Number(t.r));set('winR',wrs.length?(wrs.reduce((a,b)=>a+b,0)/wrs.length).toFixed(2)+'R':'—');set('lossR',lrs.length?(lrs.reduce((a,b)=>a+b,0)/lrs.length).toFixed(2)+'R':'—');
+ const periodTable=document.getElementById('periodTable'),periodEmpty=document.getElementById('periodEmpty');
+ if(n){periodTable.style.display='table';periodEmpty.style.display='none';const groups=groupStats(t=>{if(analyticsPeriod==='day')return t.date||'—';if(analyticsPeriod==='week')return t.week||'—';if(analyticsPeriod==='month')return t.month||'—';if(analyticsPeriod==='year')return t.year||'—';return 'All time'});periodTable.querySelector('tbody').innerHTML=groups.map(g=>`<tr><td>${g.name}</td><td>${g.trades}</td><td>${g.wins}</td><td>${g.trades-g.wins}</td><td>${fmtPct(g.wr)}</td><td class="${g.pnl>=0?'positive':'negative'}">${fmtMoney(g.pnl)}</td></tr>`).join('');} else {periodTable.style.display='none';periodEmpty.style.display='block';}
+ renderTradeLog();
+}
+function renderTradeLog(){const tb=document.getElementById('tradeLog');if(!tb)return;if(!closedTrades.length){tb.innerHTML='<tr><td colspan="14" class="muted" style="text-align:center;padding:42px">No trade records — waiting for real TFEX executions.</td></tr>';return;} const asset=document.getElementById('logAsset')?.value||'',sideF=document.getElementById('logSide')?.value||'',res=document.getElementById('logResult')?.value||'',q=(document.getElementById('logSearch')?.value||'').toLowerCase();const rows=closedTrades.filter(t=>(!asset||t.contract===asset)&&(!sideF||t.side===sideF)&&(!res||t.result===res)&&(!q||`${t.setup||''} ${t.note||''}`.toLowerCase().includes(q)));tb.innerHTML=rows.length?rows.map(t=>`<tr><td>${t.date||'—'}</td><td class="sym">${t.contract}</td><td><span class="pill ${t.side==='LONG'?'long':'short'}">${t.side}</span></td><td>${t.entryTime||'—'}</td><td>${t.entry??'—'}</td><td>${t.exitTime||'—'}</td><td>${t.exit??'—'}</td><td>${fmtHold(t.holdMin)}</td><td>${t.qty??'—'}</td><td class="${t.pnl>=0?'positive':'negative'}">${fmtMoney(t.pnl)}</td><td>${t.r===undefined?'—':t.r.toFixed(2)+'R'}</td><td>${t.result||'—'}</td><td>${t.setup||'—'}</td><td>${t.note||'—'}</td></tr>`).join(''):'<tr><td colspan="14" class="muted" style="text-align:center;padding:42px">No trades match these filters.</td></tr>';}
+function renderCalendar(){const el=document.getElementById('tradeCalendar'),title=document.getElementById('calendarTitle');if(!el||!title)return;const y=calendarDate.getFullYear(),m=calendarDate.getMonth();title.textContent=calendarDate.toLocaleString('en-US',{month:'long',year:'numeric'});const first=new Date(y,m,1),days=new Date(y,m+1,0).getDate();let mon=(first.getDay()+6)%7;let html='';for(let i=0;i<mon;i++)html+='<div class="cal-day empty-day"></div>';for(let d=1;d<=days;d++){const key=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,trades=closedTrades.filter(t=>t.date===key),pnl=trades.reduce((a,t)=>a+Number(t.pnl||0),0);html+=`<div class="cal-day ${trades.length?'has-data':''}"><span class="num">${d}</span><span class="cal-pnl ${pnl>=0?'positive':'negative'}">${trades.length?fmtMoney(pnl):'—'}</span></div>`}el.innerHTML=html;}
+function shiftCalendar(delta){calendarDate.setMonth(calendarDate.getMonth()+delta);renderCalendar();}
+['logAsset','logSide','logResult','logSearch'].forEach(id=>document.getElementById(id)?.addEventListener(id==='logSearch'?'input':'change',renderTradeLog));
+applyTfexState(); renderAnalytics();renderCalendar();
+
+function renderJournalTables(){
+ const t=document.getElementById('tradeHistory');
+ if(t) t.innerHTML='<tr><td colspan="8" class="muted" style="text-align:center;padding:28px">No trade data — waiting for TFEX account connection</td></tr>';
+ const o=document.getElementById('orderHistory');
+ if(o) o.innerHTML='<tr><td colspan="7" class="muted" style="text-align:center;padding:28px">No order data — waiting for TFEX account connection</td></tr>';
+}
+document.getElementById('setupFilter')?.addEventListener('change',renderJournalTables);
+document.getElementById('resultFilter')?.addEventListener('change',renderJournalTables);
+renderJournalTables();
+</script>
+</body></html>
