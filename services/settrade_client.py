@@ -1,180 +1,394 @@
-"""Read-only Settrade Open API connector for TFEX/derivatives.
-
-This module intentionally exposes NO order-placement/cancel methods.
-"""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-
-
-def _secret_value(cfg: Any, key: str, default: str = "") -> str:
-    try:
-        v = cfg.get(key, default)
-    except Exception:
-        try:
-            v = cfg[key]
-        except Exception:
-            v = default
-    return "" if v is None else str(v)
-
-
-def load_config(secrets: Any) -> Dict[str, str]:
-    """Accept either [settrade] nested secrets or flat Streamlit secrets."""
-    try:
-        cfg = secrets["settrade"]
-    except Exception:
-        cfg = secrets
-    return {
-        "app_id": _secret_value(cfg, "app_id") or _secret_value(secrets, "SETTRADE_APP_ID"),
-        "app_secret": _secret_value(cfg, "app_secret") or _secret_value(secrets, "SETTRADE_APP_SECRET"),
-        "broker_id": _secret_value(cfg, "broker_id", "SANDBOX") or "SANDBOX",
-        "app_code": _secret_value(cfg, "app_code", "SANDBOX") or "SANDBOX",
-        "derivatives_account": _secret_value(cfg, "derivatives_account") or _secret_value(secrets, "SETTRADE_DERIVATIVES_ACCOUNT"),
-    }
+from typing import Any
 
 
 def _clean(value: Any) -> Any:
-    """Convert SDK responses into JSON-safe structures without leaking secrets."""
+    """Convert SDK objects into JSON-safe Python values."""
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
+
     if isinstance(value, dict):
         return {str(k): _clean(v) for k, v in value.items()}
+
     if isinstance(value, (list, tuple)):
         return [_clean(v) for v in value]
+
     if hasattr(value, "to_dict"):
         try:
             return _clean(value.to_dict())
         except Exception:
             pass
+
     if hasattr(value, "__dict__"):
         try:
-            return {str(k): _clean(v) for k, v in vars(value).items() if not str(k).startswith("_")}
+            return _clean(vars(value))
         except Exception:
             pass
+
     return str(value)
 
 
-def _unwrap(response: Any) -> Any:
-    x = _clean(response)
-    if isinstance(x, dict) and "data" in x:
-        return x["data"]
-    return x
+def load_config(secrets) -> dict:
+    """Read Settrade config from Streamlit secrets."""
+
+    try:
+        cfg = secrets.get("settrade", {})
+    except Exception:
+        cfg = {}
+
+    if not isinstance(cfg, dict):
+        cfg = {}
+
+    def pick(name: str, default: str = "") -> str:
+        value = cfg.get(name)
+
+        if value is None:
+            value = secrets.get(name, default)
+
+        return str(value or "").strip()
+
+    return {
+        "app_id": pick("app_id"),
+        "app_secret": pick("app_secret"),
+        "broker_id": pick("broker_id", "SANDBOX"),
+        "app_code": pick("app_code", "SANDBOX"),
+        "derivatives_account": pick(
+            "derivatives_account",
+            "Nobody-D",
+        ),
+    }
 
 
-def _call_first(obj: Any, names: list[str]) -> tuple[Any, Optional[str]]:
-    last = None
-    for name in names:
-        fn = getattr(obj, name, None)
-        if callable(fn):
-            try:
-                return fn(), None
-            except Exception as exc:  # API method exists but failed
-                last = f"{type(exc).__name__}: {exc}"
-                return None, last
-    return None, f"SDK method not found (tried: {', '.join(names)})"
+def _error_details(exc: Exception) -> dict:
+    """Extract SettradeError / HTTP error information."""
+
+    result = {
+        "type": type(exc).__name__,
+        "message": str(exc),
+        "code": getattr(exc, "code", None),
+        "status_code": getattr(exc, "status_code", None),
+    }
+
+    response = getattr(exc, "response", None)
+
+    if response is not None:
+        try:
+            result["http_status"] = response.status_code
+        except Exception:
+            pass
+
+        try:
+            result["response_text"] = response.text[:1000]
+        except Exception:
+            pass
+
+    return result
 
 
-def connect_read_only(secrets: Any) -> Dict[str, Any]:
-    """Connect and read derivatives account/portfolio/orders only."""
-    cfg = load_config(secrets)
-    result: Dict[str, Any] = {
+def connect_read_only(secrets) -> dict:
+    """
+    Connect to Settrade V2 Sandbox in READ-ONLY mode.
+
+    Diagnostic stages:
+      1. import settrade_v2
+      2. create Investor
+      3. create Derivatives account
+      4. get_account_info
+      5. get_portfolio
+      6. list_orders
+
+    No order placement/cancel operation is performed.
+    """
+
+    config = load_config(secrets)
+
+    state = {
         "configured": False,
         "connected": False,
-        "environment": "SANDBOX" if cfg["broker_id"] == "SANDBOX" or cfg["app_code"] == "SANDBOX" else "UNKNOWN",
-        "account": cfg["derivatives_account"],
-        "account_info": None,
-        "portfolio": None,
-        "orders": None,
+        "environment": "SANDBOX",
+        "broker_id": config["broker_id"],
+        "app_code": config["app_code"],
+        "account": config["derivatives_account"],
+        "sdk_import": None,
+        "stages": [],
+        "account_info": {},
+        "portfolio": [],
+        "orders": [],
         "errors": [],
     }
 
-    missing = [k for k in ("app_id", "app_secret", "derivatives_account") if not cfg[k]]
-    if missing:
-        result["errors"].append("Missing Streamlit secret(s): " + ", ".join(missing))
-        return result
-    result["configured"] = True
+    # ---------------------------------------------------------
+    # Configuration
+    # ---------------------------------------------------------
 
-    # settrade-v2 installs the Python package as `settrade_v2`.
-    # Older Settrade SDK examples used `settrade.openapi`.
-    Investor = None
-    import_source = None
-    import_errors = []
+    missing = []
+
+    if not config["app_id"]:
+        missing.append("app_id")
+
+    if not config["app_secret"]:
+        missing.append("app_secret")
+
+    if not config["derivatives_account"]:
+        missing.append("derivatives_account")
+
+    if missing:
+        state["errors"].append({
+            "stage": "configuration",
+            "message": "Missing Streamlit Secret(s): "
+                       + ", ".join(missing),
+        })
+
+        state["stages"].append({
+            "name": "Configuration",
+            "status": "ERROR",
+            "message": "Missing: " + ", ".join(missing),
+        })
+
+        return state
+
+    state["configured"] = True
+
+    state["stages"].append({
+        "name": "Configuration",
+        "status": "OK",
+        "message": "Secrets configured",
+    })
+
+    # ---------------------------------------------------------
+    # 1. Import SDK
+    # ---------------------------------------------------------
 
     try:
-        from settrade_v2.user import Investor as _Investor
-        Investor = _Investor
-        import_source = "settrade_v2.user"
+        import settrade_v2
+
+        from settrade_v2 import Investor
+
+        state["sdk_import"] = "settrade_v2"
+
+        state["stages"].append({
+            "name": "Import settrade_v2",
+            "status": "OK",
+            "message": "SDK imported successfully",
+        })
+
     except Exception as exc:
-        import_errors.append(f"settrade_v2.user: {type(exc).__name__}: {exc}")
+        details = _error_details(exc)
 
-    if Investor is None:
-        try:
-            from settrade.openapi import Investor as _Investor
-            Investor = _Investor
-            import_source = "settrade.openapi"
-        except Exception as exc:
-            import_errors.append(f"settrade.openapi: {type(exc).__name__}: {exc}")
+        state["errors"].append({
+            "stage": "import",
+            **details,
+        })
 
-    if Investor is None:
-        result["errors"].append(
-            "Settrade SDK import failed: " + " | ".join(import_errors)
-        )
-        return result
+        state["stages"].append({
+            "name": "Import settrade_v2",
+            "status": "ERROR",
+            "message": details["message"],
+        })
 
-    result["sdk"] = {
-        "import": import_source,
-        "package": "settrade-v2",
-        "version": "2.2.1",
-    }
+        return state
+
+    # ---------------------------------------------------------
+    # 2. Create Investor
+    # ---------------------------------------------------------
 
     try:
         investor = Investor(
-            app_id=cfg["app_id"],
-            app_secret=cfg["app_secret"],
-            broker_id=cfg["broker_id"],
-            app_code=cfg["app_code"],
+            app_id=config["app_id"],
+            app_secret=config["app_secret"],
+            broker_id=config["broker_id"],
+            app_code=config["app_code"],
             is_auto_queue=False,
         )
-    except TypeError:
-        # Older SDK builds may not expose is_auto_queue.
-        try:
-            investor = Investor(
-                app_id=cfg["app_id"],
-                app_secret=cfg["app_secret"],
-                broker_id=cfg["broker_id"],
-                app_code=cfg["app_code"],
-            )
-        except Exception as exc:
-            result["errors"].append(f"Investor initialization failed: {type(exc).__name__}: {exc}")
-            return result
+
+        state["stages"].append({
+            "name": "Create Investor",
+            "status": "OK",
+            "message": "Investor initialized",
+        })
+
     except Exception as exc:
-        result["errors"].append(f"Investor initialization failed: {type(exc).__name__}: {exc}")
-        return result
+        details = _error_details(exc)
+
+        state["errors"].append({
+            "stage": "investor_initialization",
+            **details,
+        })
+
+        state["stages"].append({
+            "name": "Create Investor",
+            "status": "ERROR",
+            "message": details["message"],
+            "code": details["code"],
+            "status_code": details["status_code"],
+        })
+
+        return state
+
+    # ---------------------------------------------------------
+    # 3. Create Derivatives account
+    # ---------------------------------------------------------
 
     try:
-        deriv = investor.Derivatives(account_no=cfg["derivatives_account"])
+        deri = investor.Derivatives(
+            account_no=config["derivatives_account"]
+        )
+
+        state["stages"].append({
+            "name": "Create Derivatives",
+            "status": "OK",
+            "message": (
+                "Account: "
+                + config["derivatives_account"]
+            ),
+        })
+
     except Exception as exc:
-        result["errors"].append(f"Derivatives account initialization failed: {type(exc).__name__}: {exc}")
-        return result
+        details = _error_details(exc)
 
-    account_info, err = _call_first(deriv, ["get_account_info"])
-    if err:
-        result["errors"].append(f"Account info: {err}")
-    else:
-        result["account_info"] = _unwrap(account_info)
+        state["errors"].append({
+            "stage": "derivatives_initialization",
+            **details,
+        })
 
-    portfolio, err = _call_first(deriv, ["get_portfolio"])
-    if err:
-        result["errors"].append(f"Portfolio: {err}")
-    else:
-        result["portfolio"] = _unwrap(portfolio)
+        state["stages"].append({
+            "name": "Create Derivatives",
+            "status": "ERROR",
+            "message": details["message"],
+            "code": details["code"],
+            "status_code": details["status_code"],
+        })
 
-    orders, err = _call_first(deriv, ["list_orders"])
-    if err:
-        result["errors"].append(f"Orders: {err}")
-    else:
-        result["orders"] = _unwrap(orders)
+        return state
 
-    # Connection is considered healthy if at least the account endpoint returned.
-    result["connected"] = result["account_info"] is not None
-    return result
+    # ---------------------------------------------------------
+    # 4. get_account_info
+    # ---------------------------------------------------------
+
+    try:
+        account_info = deri.get_account_info()
+
+        state["account_info"] = _clean(account_info)
+
+        state["stages"].append({
+            "name": "get_account_info",
+            "status": "OK",
+            "message": "Account information received",
+        })
+
+        state["connected"] = True
+
+    except Exception as exc:
+        details = _error_details(exc)
+
+        state["errors"].append({
+            "stage": "get_account_info",
+            **details,
+        })
+
+        state["stages"].append({
+            "name": "get_account_info",
+            "status": "ERROR",
+            "message": details["message"],
+            "code": details["code"],
+            "status_code": details["status_code"],
+        })
+
+        return state
+
+    # ---------------------------------------------------------
+    # 5. get_portfolio
+    # ---------------------------------------------------------
+
+    try:
+        if hasattr(deri, "get_portfolio"):
+            portfolio = deri.get_portfolio()
+
+            portfolio = _clean(portfolio)
+
+            if isinstance(portfolio, dict):
+                portfolio = portfolio.get(
+                    "data",
+                    portfolio,
+                )
+
+            state["portfolio"] = portfolio
+
+            state["stages"].append({
+                "name": "get_portfolio",
+                "status": "OK",
+                "message": "Portfolio received",
+            })
+
+        else:
+            state["stages"].append({
+                "name": "get_portfolio",
+                "status": "SKIP",
+                "message": "SDK method not available",
+            })
+
+    except Exception as exc:
+        details = _error_details(exc)
+
+        state["errors"].append({
+            "stage": "get_portfolio",
+            **details,
+        })
+
+        state["stages"].append({
+            "name": "get_portfolio",
+            "status": "ERROR",
+            "message": details["message"],
+            "code": details["code"],
+            "status_code": details["status_code"],
+        })
+
+    # ---------------------------------------------------------
+    # 6. list_orders
+    # ---------------------------------------------------------
+
+    try:
+        if hasattr(deri, "list_orders"):
+            orders = deri.list_orders()
+
+            orders = _clean(orders)
+
+            if isinstance(orders, dict):
+                orders = orders.get(
+                    "data",
+                    orders,
+                )
+
+            state["orders"] = orders
+
+            state["stages"].append({
+                "name": "list_orders",
+                "status": "OK",
+                "message": "Orders received",
+            })
+
+        else:
+            state["stages"].append({
+                "name": "list_orders",
+                "status": "SKIP",
+                "message": "SDK method not available",
+            })
+
+    except Exception as exc:
+        details = _error_details(exc)
+
+        state["errors"].append({
+            "stage": "list_orders",
+            **details,
+        })
+
+        state["stages"].append({
+            "name": "list_orders",
+            "status": "ERROR",
+            "message": details["message"],
+            "code": details["code"],
+            "status_code": details["status_code"],
+        })
+
+    return state
