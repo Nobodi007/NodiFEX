@@ -42,7 +42,7 @@ cfg = load_config(st.secrets)
 with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not state.get("connected", False)):
     configured = bool(state.get("configured"))
     connected = bool(state.get("connected"))
-    sdk_ok = not any("Cannot import settrade SDK" in str(e) for e in state.get("errors", []))
+    sdk_ok = bool(state.get("sdk"))
     account_ok = bool(state.get("account_info")) or connected
 
     st.markdown(
@@ -57,9 +57,9 @@ with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not sta
                 {'YES' if configured else 'NO'}
                 </span>
             </div>
-            <div>SDK / Investor:
+            <div>SDK / Import:
                 <span class="{'tfex-ok' if sdk_ok else 'tfex-bad'}">
-                {'OK' if sdk_ok else 'ERROR'}
+                {state.get('sdk', {}).get('import', 'ERROR') if sdk_ok else 'ERROR'}
                 </span>
             </div>
             <div>Connection:
@@ -79,6 +79,10 @@ with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not sta
             st.code(str(error), language=None)
     else:
         st.success("Settrade read-only connection is healthy.")
+
+    sdk_meta = state.get("sdk") or {}
+    if sdk_meta:
+        st.caption(f"SDK package: {sdk_meta.get('package', '—')} | version: {sdk_meta.get('version', '—')} | import: {sdk_meta.get('import', '—')}")
 
     c1, c2, c3 = st.columns(3)
     with c1:
