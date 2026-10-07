@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TFEX Terminal — Trading Journal</title>
+<style>
+:root{
+ --bg:#080b10;--panel:#0e131b;--panel2:#111822;--line:#202936;--text:#eef3f8;
+ --muted:#8491a3;--green:#27d17f;--red:#ff5d6c;--blue:#5b8cff;--amber:#f6c453;
+}
+*{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 75% -10%,#18233a 0,#080b10 38%);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+button,input,select{font:inherit} button{cursor:pointer}
+.app{display:flex;min-height:100vh}.side{width:230px;border-right:1px solid var(--line);background:rgba(8,11,16,.88);padding:22px 14px;position:fixed;inset:0 auto 0 0}
+.logo{font-weight:800;font-size:19px;padding:8px 10px 25px}.logo span{color:var(--blue)}
+.nav{display:grid;gap:5px}.nav button{border:0;background:none;color:var(--muted);padding:11px 12px;text-align:left;border-radius:9px}.nav button.active,.nav button:hover{background:#151c27;color:white}
+.mode{position:absolute;bottom:18px;left:14px;right:14px;border:1px solid #273244;background:#0e141d;border-radius:10px;padding:12px}.dot{display:inline-block;width:7px;height:7px;background:var(--amber);border-radius:50%;margin-right:7px}.small{font-size:11px;color:var(--muted)}
+main{margin-left:230px;width:calc(100% - 230px);padding:28px 32px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px}.title h1{margin:0;font-size:25px}.title p{margin:5px 0 0;color:var(--muted);font-size:13px}
+.primary{background:#fff;color:#080b10;border:0;border-radius:9px;padding:10px 15px;font-weight:750}.primary:hover{transform:translateY(-1px)}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}.card{background:linear-gradient(180deg,#101721,#0d131b);border:1px solid var(--line);border-radius:13px;padding:17px}.label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.value{font-size:24px;font-weight:760;margin-top:9px}.green{color:var(--green)}.red{color:var(--red)}
+.grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,.9fr);gap:16px;margin-top:16px}.panel{background:rgba(14,19,27,.9);border:1px solid var(--line);border-radius:13px;overflow:hidden}.ph{padding:16px 17px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.ph h2{font-size:14px;margin:0}.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:13px 17px;border-bottom:1px solid #1a222e;font-size:12px}th{color:#788597;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.06em}tr:last-child td{border-bottom:0}.sym{font-weight:750}.pill{font-size:10px;padding:4px 7px;border-radius:5px;font-weight:700}.long{color:var(--green);background:#0d2a20}.short{color:var(--red);background:#32151a}
+.chart{height:250px;padding:10px 17px 18px;display:flex;align-items:end;gap:5px}.bar{flex:1;background:linear-gradient(to top,#2459c8,#5b8cff);opacity:.8;border-radius:3px 3px 0 0;min-width:5px}.bar.neg{background:linear-gradient(to top,#8b2632,#ff5d6c)}.chart-wrap{height:100%;display:flex;flex-direction:column;justify-content:end;width:100%}.axis{border-top:1px solid #25303e;margin-top:5px}
+.empty{padding:35px;text-align:center;color:var(--muted)}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);align-items:center;justify-content:center;padding:18px;z-index:5}.modal.show{display:flex}.dialog{width:460px;max-width:100%;background:#0e141d;border:1px solid #293342;border-radius:15px;box-shadow:0 20px 80px #000;padding:20px}.dialog h2{margin:0 0 18px;font-size:18px}.field{margin-bottom:13px}.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px}.field input,.field select{width:100%;background:#080d14;border:1px solid #293342;color:#fff;border-radius:8px;padding:10px;outline:none}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sidebtn{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px}.sidebtn button{padding:10px;border:1px solid #2a3442;background:#0a1017;color:var(--muted);border-radius:8px;font-weight:700}.sidebtn button.sel-long{border-color:#219d62;color:var(--green);background:#0d241b}.sidebtn button.sel-short{border-color:#a83b47;color:var(--red);background:#2a1217}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.ghost{background:#151d28;color:#d5dce5;border:1px solid #293342;border-radius:8px;padding:10px 14px}
+.toast{position:fixed;right:22px;bottom:22px;background:#151d28;border:1px solid #334054;border-radius:9px;padding:12px 15px;display:none;z-index:10;font-size:12px}
+@media(max-width:900px){.side{width:65px;padding:15px 8px}.logo{font-size:0}.logo span{font-size:20px}.nav button{font-size:0;text-align:center}.side .mode{display:none}main{margin-left:65px;width:calc(100% - 65px);padding:20px}.cards{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+@media(max-width:600px){.cards{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.top{align-items:flex-start}.top .primary{padding:9px}.hide-mobile{display:none}th:nth-child(4),td:nth-child(4){display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+  <div class="logo">TFEX <span>TERMINAL</span></div>
+  <div class="nav">
+    <button class="active" onclick="nav(this)">◈ &nbsp; Dashboard</button>
+    <button onclick="nav(this)">▣ &nbsp; Orders</button>
+    <button onclick="nav(this)">◉ &nbsp; Positions</button>
+    <button onclick="nav(this)">↗ &nbsp; Journal</button>
+    <button onclick="nav(this)">⌁ &nbsp; Analytics</button>
+  </div>
+  <div class="mode"><span class="dot"></span><b style="font-size:11px">SANDBOX MODE</b><div class="small" style="margin-top:5px">No live orders are sent.</div></div>
+</aside>
+<main>
+  <div class="top">
+    <div class="title"><h1>Dashboard</h1><p>Trading Journal · Wednesday, 7 October 2026</p></div>
+    <button class="primary" onclick="openModal()">＋ New Order</button>
+  </div>
+
+  <section class="cards">
+    <div class="card"><div class="label">Portfolio Value</div><div class="value" id="portfolio">฿1,250,000</div><div class="small">Equity</div></div>
+    <div class="card"><div class="label">Margin Used</div><div class="value">฿186,400</div><div class="small">14.9% of equity</div></div>
+    <div class="card"><div class="label">Unrealized P/L</div><div class="value green" id="unreal">+฿12,850</div><div class="small">Open positions</div></div>
+    <div class="card"><div class="label">Realized P/L</div><div class="value green" id="realized">+฿8,420</div><div class="small">This month</div></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="ph"><h2>Open Positions</h2><span class="small" id="posCount">3 positions</span></div>
+      <table><thead><tr><th>Contract</th><th>Side</th><th>Qty</th><th>Avg Price</th><th>Last</th><th>P/L</th></tr></thead>
+      <tbody id="positions"></tbody></table>
+      <div id="noPos" class="empty" style="display:none">No open positions. Add an order to start.</div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Recent Orders</h2><span class="small">Today</span></div>
+      <table><thead><tr><th>Time</th><th>Contract</th><th>Side</th><th>Qty</th></tr></thead><tbody id="orders"></tbody></table>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section class="panel">
+      <div class="ph"><h2>P/L Performance</h2><span class="small">Last 30 days</span></div>
+      <div class="chart" id="chart"></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><h2>Quick Journal</h2><span class="small">Latest notes</span></div>
+      <div style="padding:18px">
+        <div style="font-weight:700;font-size:13px">S50Z26 · Breakout</div>
+        <div class="small" style="margin-top:6px;line-height:1.6">ทะลุแนวต้าน + volume เพิ่มขึ้น จึงเข้า Long ตามแผน</div>
+        <hr style="border:0;border-top:1px solid #202936;margin:16px 0">
+        <div style="font-weight:700;font-size:13px">MZ26 · Mean Reversion</div>
+        <div class="small" style="margin-top:6px;line-height:1.6">รอ confirmation ก่อนเพิ่ม position</div>
+      </div>
+    </section>
+  </div>
+</main>
+</div>
+
+<div class="modal" id="modal">
+ <div class="dialog">
+  <h2>New Order</h2>
+  <div class="field"><label>Contract</label><input id="contract" value="S50Z26"></div>
+  <div class="sidebtn"><button id="longBtn" class="sel-long" onclick="setSide('LONG')">LONG</button><button id="shortBtn" onclick="setSide('SHORT')">SHORT</button></div>
+  <div class="row">
+   <div class="field"><label>Quantity</label><input id="qty" type="number" min="1" value="1"></div>
+   <div class="field"><label>Price</label><input id="price" type="number" step="0.01" value="845.20"></div>
+  </div>
+  <div class="row">
+   <div class="field"><label>Stop Loss (optional)</label><input id="sl" type="number" step="0.01" placeholder="—"></div>
+   <div class="field"><label>Take Profit (optional)</label><input id="tp" type="number" step="0.01" placeholder="—"></div>
+  </div>
+  <div class="field"><label>Note</label><input id="note" placeholder="Why did you take this trade?"></div>
+  <div class="actions"><button class="ghost" onclick="closeModal()">Cancel</button><button class="primary" onclick="addOrder()">Add Order</button></div>
+ </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let side='LONG';
+let positions=[
+ {c:'S50Z26',s:'LONG',q:2,avg:845.20,last:848.50,mult:500},
+ {c:'MZ26',s:'SHORT',q:1,avg:124.50,last:122.10,mult:1000},
+ {c:'GOZ26',s:'LONG',q:1,avg:4120,last:4123.85,mult:100}
+];
+let orders=[
+ {t:'10:15',c:'MZ26',s:'SELL',q:1,p:124.50},
+ {t:'09:42',c:'S50Z26',s:'BUY',q:2,p:845.20},
+ {t:'08:57',c:'GOZ26',s:'BUY',q:1,p:4120}
+];
+function pnl(p){return (p.s==='LONG'?(p.last-p.avg):(p.avg-p.last))*p.q*p.mult}
+function render(){
+ let tb=document.getElementById('positions');tb.innerHTML='';
+ let total=0;
+ positions.forEach(p=>{let x=pnl(p);total+=x;tb.innerHTML+=`<tr><td class="sym">${p.c}</td><td><span class="pill ${p.s==='LONG'?'long':'short'}">${p.s}</span></td><td>${p.q}</td><td>${p.avg.toLocaleString()}</td><td>${p.last.toLocaleString()}</td><td class="${x>=0?'green':'red'}">${x>=0?'+':''}฿${Math.round(x).toLocaleString()}</td></tr>`});
+ document.getElementById('noPos').style.display=positions.length?'none':'block';
+ document.getElementById('posCount').textContent=positions.length+' positions';
+ document.getElementById('unreal').textContent=(total>=0?'+':'-')+'฿'+Math.abs(Math.round(total)).toLocaleString();
+ let ob=document.getElementById('orders');ob.innerHTML='';
+ orders.slice(0,6).forEach(o=>ob.innerHTML+=`<tr><td class="muted">${o.t}</td><td class="sym">${o.c}</td><td><span class="pill ${o.s==='BUY'?'long':'short'}">${o.s}</span></td><td>${o.q}</td></tr>`);
+}
+function openModal(){document.getElementById('modal').classList.add('show')}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function setSide(x){side=x;document.getElementById('longBtn').className=x==='LONG'?'sel-long':'';document.getElementById('shortBtn').className=x==='SHORT'?'sel-short':''}
+function addOrder(){
+ let c=document.getElementById('contract').value.trim().toUpperCase(),q=+document.getElementById('qty').value,p=+document.getElementById('price').value;
+ if(!c||q<1||!p){toast('Please enter contract, quantity and price');return}
+ let idx=positions.findIndex(x=>x.c===c&&x.s===side);
+ if(idx>=0){let old=positions[idx];old.avg=(old.avg*old.q+p*q)/(old.q+q);old.q+=q;old.last=p}else positions.unshift({c,s:side,q,avg:p,last:p,mult:c.startsWith('S50')?500:c.startsWith('GO')?100:1000});
+ orders.unshift({t:new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),c,s:side==='LONG'?'BUY':'SELL',q,p});
+ closeModal();render();toast('Order added to sandbox journal');
+}
+function toast(s){let t=document.getElementById('toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',1800)}
+function nav(el){document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));el.classList.add('active');toast(el.textContent.trim()+' — prototype view')}
+let vals=[-3,2,4,1,5,3,7,6,8,5,9,11,8,12,10,13,11,14,12,16,13,15,18,17,20,18,22,21,24,26];
+let ch=document.getElementById('chart');vals.forEach(v=>{let b=document.createElement('div');b.className='bar';b.style.height=(v/26*88+5)+'%';ch.appendChild(b)});
+render();
+</script>
+</body></html>
