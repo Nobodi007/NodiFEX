@@ -94,11 +94,38 @@ def connect_read_only(secrets: Any) -> Dict[str, Any]:
         return result
     result["configured"] = True
 
+    # settrade-v2 installs the Python package as `settrade_v2`.
+    # Older Settrade SDK examples used `settrade.openapi`.
+    Investor = None
+    import_source = None
+    import_errors = []
+
     try:
-        from settrade.openapi import Investor
+        from settrade_v2.user import Investor as _Investor
+        Investor = _Investor
+        import_source = "settrade_v2.user"
     except Exception as exc:
-        result["errors"].append(f"Settrade SDK import failed: {type(exc).__name__}: {exc}")
+        import_errors.append(f"settrade_v2.user: {type(exc).__name__}: {exc}")
+
+    if Investor is None:
+        try:
+            from settrade.openapi import Investor as _Investor
+            Investor = _Investor
+            import_source = "settrade.openapi"
+        except Exception as exc:
+            import_errors.append(f"settrade.openapi: {type(exc).__name__}: {exc}")
+
+    if Investor is None:
+        result["errors"].append(
+            "Settrade SDK import failed: " + " | ".join(import_errors)
+        )
         return result
+
+    result["sdk"] = {
+        "import": import_source,
+        "package": "settrade-v2",
+        "version": "2.2.1",
+    }
 
     try:
         investor = Investor(
