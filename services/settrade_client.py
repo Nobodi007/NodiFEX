@@ -1,394 +1,311 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict
+
+import streamlit as st
 
 
-def _clean(value: Any) -> Any:
-    """Convert SDK objects into JSON-safe Python values."""
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-
-    if isinstance(value, dict):
-        return {str(k): _clean(v) for k, v in value.items()}
-
-    if isinstance(value, (list, tuple)):
-        return [_clean(v) for v in value]
-
-    if hasattr(value, "to_dict"):
-        try:
-            return _clean(value.to_dict())
-        except Exception:
-            pass
-
-    if hasattr(value, "__dict__"):
-        try:
-            return _clean(vars(value))
-        except Exception:
-            pass
-
-    return str(value)
-
-
-def load_config(secrets) -> dict:
-    """Read Settrade config from Streamlit secrets."""
+def load_config() -> Dict[str, Any]:
+    """Load Settrade configuration from Streamlit Secrets."""
 
     try:
-        cfg = secrets.get("settrade", {})
-    except Exception:
-        cfg = {}
+        cfg = st.secrets["settrade"]
 
-    if not isinstance(cfg, dict):
-        cfg = {}
+        return {
+            "app_id": str(cfg.get("app_id", "")).strip(),
+            "app_secret": str(cfg.get("app_secret", "")).strip(),
+            "broker_id": str(cfg.get("broker_id", "SANDBOX")).strip(),
+            "app_code": str(cfg.get("app_code", "SANDBOX")).strip(),
+            "derivatives_account": str(
+                cfg.get("derivatives_account", "Nobody-D")
+            ).strip(),
+        }
 
-    def pick(name: str, default: str = "") -> str:
-        value = cfg.get(name)
-
-        if value is None:
-            value = secrets.get(name, default)
-
-        return str(value or "").strip()
-
-    return {
-        "app_id": pick("app_id"),
-        "app_secret": pick("app_secret"),
-        "broker_id": pick("broker_id", "SANDBOX"),
-        "app_code": pick("app_code", "SANDBOX"),
-        "derivatives_account": pick(
-            "derivatives_account",
-            "Nobody-D",
-        ),
-    }
+    except Exception as e:
+        return {
+            "app_id": "",
+            "app_secret": "",
+            "broker_id": "SANDBOX",
+            "app_code": "SANDBOX",
+            "derivatives_account": "Nobody-D",
+            "_error": str(e),
+        }
 
 
-def _error_details(exc: Exception) -> dict:
-    """Extract SettradeError / HTTP error information."""
+def _error_details(exc: Exception) -> Dict[str, Any]:
+    """Extract useful information from Settrade/API exceptions."""
 
-    result = {
+    details: Dict[str, Any] = {
         "type": type(exc).__name__,
         "message": str(exc),
-        "code": getattr(exc, "code", None),
-        "status_code": getattr(exc, "status_code", None),
     }
+
+    for attr in ("code", "status_code"):
+        value = getattr(exc, attr, None)
+        if value is not None:
+            details[attr] = value
 
     response = getattr(exc, "response", None)
 
     if response is not None:
         try:
-            result["http_status"] = response.status_code
+            details["response_status"] = response.status_code
         except Exception:
             pass
 
         try:
-            result["response_text"] = response.text[:1000]
+            details["response_text"] = response.text[:2000]
         except Exception:
             pass
 
-    return result
+    return details
 
 
-def connect_read_only(secrets) -> dict:
+def connect_read_only() -> Dict[str, Any]:
     """
-    Connect to Settrade V2 Sandbox in READ-ONLY mode.
+    Connect to Settrade Sandbox in READ-ONLY mode.
 
-    Diagnostic stages:
-      1. import settrade_v2
-      2. create Investor
-      3. create Derivatives account
-      4. get_account_info
-      5. get_portfolio
-      6. list_orders
+    This function intentionally does NOT:
+    - place orders
+    - cancel orders
+    - modify positions
+    - submit PIN
 
-    No order placement/cancel operation is performed.
+    It only tests the connection and reads account data.
     """
 
-    config = load_config(secrets)
-
-    state = {
-        "configured": False,
+    state: Dict[str, Any] = {
         "connected": False,
         "environment": "SANDBOX",
-        "broker_id": config["broker_id"],
-        "app_code": config["app_code"],
-        "account": config["derivatives_account"],
-        "sdk_import": None,
+        "broker_id": "",
+        "app_code": "",
+        "account": "",
         "stages": [],
-        "account_info": {},
-        "portfolio": [],
-        "orders": [],
         "errors": [],
+        "account_info": None,
+        "portfolio": None,
+        "orders": None,
     }
 
     # ---------------------------------------------------------
-    # Configuration
+    # STAGE 1 — Configuration
     # ---------------------------------------------------------
 
-    missing = []
+    cfg = load_config()
 
-    if not config["app_id"]:
-        missing.append("app_id")
+    state["broker_id"] = cfg["broker_id"]
+    state["app_code"] = cfg["app_code"]
+    state["account"] = cfg["derivatives_account"]
 
-    if not config["app_secret"]:
-        missing.append("app_secret")
-
-    if not config["derivatives_account"]:
-        missing.append("derivatives_account")
-
-    if missing:
-        state["errors"].append({
-            "stage": "configuration",
-            "message": "Missing Streamlit Secret(s): "
-                       + ", ".join(missing),
-        })
+    if cfg.get("_error"):
+        error = {
+            "stage": "1. Configuration",
+            "error": cfg["_error"],
+        }
 
         state["stages"].append({
-            "name": "Configuration",
-            "status": "ERROR",
-            "message": "Missing: " + ", ".join(missing),
+            "stage": "1. Configuration",
+            "status": "FAIL",
+        })
+
+        state["errors"].append(error)
+
+        return state
+
+    required = [
+        "app_id",
+        "app_secret",
+        "broker_id",
+        "app_code",
+        "derivatives_account",
+    ]
+
+    missing = [
+        key
+        for key in required
+        if not cfg.get(key)
+    ]
+
+    if missing:
+        state["stages"].append({
+            "stage": "1. Configuration",
+            "status": "FAIL",
+        })
+
+        state["errors"].append({
+            "stage": "1. Configuration",
+            "error": "Missing configuration",
+            "missing": missing,
         })
 
         return state
 
-    state["configured"] = True
-
     state["stages"].append({
-        "name": "Configuration",
+        "stage": "1. Configuration",
         "status": "OK",
-        "message": "Secrets configured",
     })
 
     # ---------------------------------------------------------
-    # 1. Import SDK
+    # STAGE 2 — Import SDK
     # ---------------------------------------------------------
 
     try:
-        import settrade_v2
-
         from settrade_v2 import Investor
 
-        state["sdk_import"] = "settrade_v2"
-
         state["stages"].append({
-            "name": "Import settrade_v2",
+            "stage": "2. Import settrade_v2",
             "status": "OK",
-            "message": "SDK imported successfully",
         })
 
-    except Exception as exc:
-        details = _error_details(exc)
+    except Exception as e:
+        state["stages"].append({
+            "stage": "2. Import settrade_v2",
+            "status": "FAIL",
+        })
 
         state["errors"].append({
-            "stage": "import",
-            **details,
-        })
-
-        state["stages"].append({
-            "name": "Import settrade_v2",
-            "status": "ERROR",
-            "message": details["message"],
+            "stage": "2. Import settrade_v2",
+            **_error_details(e),
         })
 
         return state
 
     # ---------------------------------------------------------
-    # 2. Create Investor
+    # STAGE 3 — Create Investor
     # ---------------------------------------------------------
 
     try:
         investor = Investor(
-            app_id=config["app_id"],
-            app_secret=config["app_secret"],
-            broker_id=config["broker_id"],
-            app_code=config["app_code"],
+            app_id=cfg["app_id"],
+            app_secret=cfg["app_secret"],
+            broker_id=cfg["broker_id"],
+            app_code=cfg["app_code"],
             is_auto_queue=False,
         )
 
         state["stages"].append({
-            "name": "Create Investor",
+            "stage": "3. Create Investor",
             "status": "OK",
-            "message": "Investor initialized",
         })
 
-    except Exception as exc:
-        details = _error_details(exc)
+    except Exception as e:
+        state["stages"].append({
+            "stage": "3. Create Investor",
+            "status": "FAIL",
+        })
 
         state["errors"].append({
-            "stage": "investor_initialization",
-            **details,
-        })
-
-        state["stages"].append({
-            "name": "Create Investor",
-            "status": "ERROR",
-            "message": details["message"],
-            "code": details["code"],
-            "status_code": details["status_code"],
+            "stage": "3. Create Investor",
+            **_error_details(e),
         })
 
         return state
 
     # ---------------------------------------------------------
-    # 3. Create Derivatives account
+    # STAGE 4 — Create Derivatives client
     # ---------------------------------------------------------
 
     try:
         deri = investor.Derivatives(
-            account_no=config["derivatives_account"]
+            account_no=cfg["derivatives_account"]
         )
 
         state["stages"].append({
-            "name": "Create Derivatives",
+            "stage": "4. Create Derivatives",
             "status": "OK",
-            "message": (
-                "Account: "
-                + config["derivatives_account"]
-            ),
         })
 
-    except Exception as exc:
-        details = _error_details(exc)
+    except Exception as e:
+        state["stages"].append({
+            "stage": "4. Create Derivatives",
+            "status": "FAIL",
+        })
 
         state["errors"].append({
-            "stage": "derivatives_initialization",
-            **details,
-        })
-
-        state["stages"].append({
-            "name": "Create Derivatives",
-            "status": "ERROR",
-            "message": details["message"],
-            "code": details["code"],
-            "status_code": details["status_code"],
+            "stage": "4. Create Derivatives",
+            **_error_details(e),
         })
 
         return state
 
     # ---------------------------------------------------------
-    # 4. get_account_info
+    # STAGE 5 — Account information
     # ---------------------------------------------------------
 
     try:
         account_info = deri.get_account_info()
 
-        state["account_info"] = _clean(account_info)
+        state["account_info"] = account_info
 
         state["stages"].append({
-            "name": "get_account_info",
+            "stage": "5. get_account_info",
             "status": "OK",
-            "message": "Account information received",
         })
 
+        # Connection is considered valid once account info works.
         state["connected"] = True
 
-    except Exception as exc:
-        details = _error_details(exc)
-
-        state["errors"].append({
-            "stage": "get_account_info",
-            **details,
+    except Exception as e:
+        state["stages"].append({
+            "stage": "5. get_account_info",
+            "status": "FAIL",
         })
 
-        state["stages"].append({
-            "name": "get_account_info",
-            "status": "ERROR",
-            "message": details["message"],
-            "code": details["code"],
-            "status_code": details["status_code"],
+        state["errors"].append({
+            "stage": "5. get_account_info",
+            **_error_details(e),
         })
 
         return state
 
     # ---------------------------------------------------------
-    # 5. get_portfolio
+    # STAGE 6 — Portfolio
     # ---------------------------------------------------------
 
     try:
-        if hasattr(deri, "get_portfolio"):
-            portfolio = deri.get_portfolio()
+        portfolio = deri.get_portfolio()
 
-            portfolio = _clean(portfolio)
-
-            if isinstance(portfolio, dict):
-                portfolio = portfolio.get(
-                    "data",
-                    portfolio,
-                )
-
-            state["portfolio"] = portfolio
-
-            state["stages"].append({
-                "name": "get_portfolio",
-                "status": "OK",
-                "message": "Portfolio received",
-            })
-
-        else:
-            state["stages"].append({
-                "name": "get_portfolio",
-                "status": "SKIP",
-                "message": "SDK method not available",
-            })
-
-    except Exception as exc:
-        details = _error_details(exc)
-
-        state["errors"].append({
-            "stage": "get_portfolio",
-            **details,
-        })
+        state["portfolio"] = portfolio
 
         state["stages"].append({
-            "name": "get_portfolio",
-            "status": "ERROR",
-            "message": details["message"],
-            "code": details["code"],
-            "status_code": details["status_code"],
+            "stage": "6. get_portfolio",
+            "status": "OK",
+        })
+
+    except Exception as e:
+        state["stages"].append({
+            "stage": "6. get_portfolio",
+            "status": "FAIL",
+        })
+
+        state["errors"].append({
+            "stage": "6. get_portfolio",
+            **_error_details(e),
         })
 
     # ---------------------------------------------------------
-    # 6. list_orders
+    # STAGE 7 — Orders
     # ---------------------------------------------------------
 
     try:
-        if hasattr(deri, "list_orders"):
-            orders = deri.list_orders()
+        orders = deri.list_orders()
 
-            orders = _clean(orders)
-
-            if isinstance(orders, dict):
-                orders = orders.get(
-                    "data",
-                    orders,
-                )
-
-            state["orders"] = orders
-
-            state["stages"].append({
-                "name": "list_orders",
-                "status": "OK",
-                "message": "Orders received",
-            })
-
-        else:
-            state["stages"].append({
-                "name": "list_orders",
-                "status": "SKIP",
-                "message": "SDK method not available",
-            })
-
-    except Exception as exc:
-        details = _error_details(exc)
-
-        state["errors"].append({
-            "stage": "list_orders",
-            **details,
-        })
+        state["orders"] = orders
 
         state["stages"].append({
-            "name": "list_orders",
-            "status": "ERROR",
-            "message": details["message"],
-            "code": details["code"],
-            "status_code": details["status_code"],
+            "stage": "7. list_orders",
+            "status": "OK",
+        })
+
+    except Exception as e:
+        state["stages"].append({
+            "stage": "7. list_orders",
+            "status": "FAIL",
+        })
+
+        state["errors"].append({
+            "stage": "7. list_orders",
+            **_error_details(e),
         })
 
     return state
