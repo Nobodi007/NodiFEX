@@ -1,6 +1,8 @@
 import json
+import platform
 from pathlib import Path
 
+import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -26,6 +28,65 @@ section.main > div.block-container { max-width:none!important; width:100%!import
 .tfex-muted { opacity:.75; }
 </style>
 """, unsafe_allow_html=True)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def probe_settrade_network():
+    """Probe the exact SDK version endpoint from the deployed Streamlit runtime.
+
+    This does not use credentials. It is intentionally separate from
+    connect_read_only() so we can distinguish a network/WAF 403 from an
+    authentication or account problem.
+    """
+    url = "https://open-api-test.settrade.com/sdk-open-api/sdk-version.json"
+
+    try:
+        import settrade_v2
+
+        sdk_version = getattr(settrade_v2, "__version__", "unknown")
+        ua = (
+            f"SettradeOpenApiSdkV2Python{platform.python_version()}"
+            f"_x{platform.architecture()[0].replace('bit', '')}/{sdk_version}"
+        )
+
+        response = requests.get(
+            url,
+            headers={
+                "User-Agent": ua,
+                "Content-Type": "application/json",
+            },
+            timeout=20,
+        )
+
+        return {
+            "ok": response.ok,
+            "status": response.status_code,
+            "reason": response.reason,
+            "url": url,
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "architecture": platform.architecture()[0],
+            "sdk_version": sdk_version,
+            "user_agent": ua,
+            "body": response.text[:1500],
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": None,
+            "reason": None,
+            "url": url,
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "architecture": platform.architecture()[0],
+            "sdk_version": None,
+            "user_agent": None,
+            "body": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
 
 @st.cache_data(ttl=20, show_spinner=False)
@@ -83,6 +144,54 @@ with st.expander("🔌 Settrade Sandbox connection diagnostic", expanded=not sta
     sdk_meta = state.get("sdk") or {}
     if sdk_meta:
         st.caption(f"SDK package: {sdk_meta.get('package', '—')} | version: {sdk_meta.get('version', '—')} | import: {sdk_meta.get('import', '—')}")
+
+    # Cloud-side network diagnostic. This is the same version endpoint that
+    # settrade-v2 checks during Investor initialization, but without secrets.
+    st.divider()
+    st.subheader("🌐 Settrade network diagnostic")
+
+    probe = probe_settrade_network()
+
+    p1, p2, p3 = st.columns(3)
+    with p1:
+        st.metric("SDK version", probe.get("sdk_version") or "—")
+    with p2:
+        status = probe.get("status")
+        st.metric("Version endpoint", str(status) if status is not None else "ERROR")
+    with p3:
+        st.metric("Python", probe.get("python") or "—")
+
+    if probe.get("ok"):
+        st.success("Cloud runtime can reach the Settrade Sandbox version endpoint (HTTP 200).")
+    elif probe.get("status") == 403:
+        st.error(
+            "Cloud runtime reaches Settrade, but Settrade/CDN returns HTTP 403 "
+            "for the SDK version endpoint. This is not a missing-secret error."
+        )
+        st.info(
+            "Local testing can still work while Streamlit Community Cloud fails because "
+            "the app runs from Streamlit's cloud network. If this stays 403, the likely "
+            "fix is network/IP allowlisting or moving the Settrade connector to a backend "
+            "with an accepted/stable egress IP—not changing the App ID/secret."
+        )
+    elif probe.get("status") is not None:
+        st.warning(
+            f"Cloud runtime reached the endpoint but received HTTP {probe.get('status')} "
+            f"({probe.get('reason') or 'no reason'})."
+        )
+    else:
+        st.warning(f"Network probe failed: {probe.get('error') or 'unknown error'}")
+
+    with st.expander("Show cloud runtime details", expanded=False):
+        st.write("Platform:", probe.get("platform") or "—")
+        st.write("Machine:", probe.get("machine") or "—")
+        st.write("Architecture:", probe.get("architecture") or "—")
+        st.write("Endpoint:", probe.get("url") or "—")
+        st.write("User-Agent:", probe.get("user_agent") or "—")
+        if probe.get("body"):
+            st.code(probe["body"], language="json")
+        if probe.get("error"):
+            st.code(probe["error"], language=None)
 
     c1, c2, c3 = st.columns(3)
     with c1:
